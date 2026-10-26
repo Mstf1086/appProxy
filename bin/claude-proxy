@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# claude-proxy — provider ve model seç, proxy'yi ÖN PLANDA başlat.
+#
+# Kullanım:
+#   claude-proxy                     # interaktif: provider seç -> model listesi gelsin -> model seç -> ön planda başlat
+#   claude-proxy <provider>          # provider doğrudan, model interaktif
+#   claude-proxy <provider> <model>  # hiç sormadan, ön planda başlat
+#
+# Proxy arka plana düşmez: `exec node src/server.mjs` ile bu terminalde ön planda
+# çalışır, Ctrl+C ile durdurulur. Claude Code'u başka terminalde çalıştırmak için
+# script başlangıçta gerekli `export` satırlarını yazar.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+node_cfg() {
+  node --input-type=module -e "$1"
+}
+
+# --- 1. Provider seçimi (providers.json'dan dinamik) ---------------------
+PROVIDERS=$(node_cfg "
+import { loadConfig } from './src/config.mjs';
+const cfg = loadConfig();
+console.log(Object.keys(cfg.providers).join('\\n'));
+")
+
+if [[ $# -ge 1 ]]; then
+  PROVIDER="$1"
+  if ! grep -qx "$PROVIDER" <<< "$PROVIDERS"; then
+    echo "HATA: bilinmeyen provider: $PROVIDER" >&2
+    echo "Geçerli seçenekler: $(echo "$PROVIDERS" | tr '\n' ' ')" >&2
+    exit 1
+  fi
+else
+  echo "Provider seçimi:"
+  select PROVIDER in $PROVIDERS; do
+    [[ -n "$PROVIDER" ]] && break
+  done
+  if [[ -z "${PROVIDER:-}" ]]; then
+    PROVIDER="$(head -n1 <<< "$PROVIDERS")"
+    echo "Seçim yapılmadı, ilk provider kullanılacak: $PROVIDER" >&2
+  fi
+fi
+
+# --- 2. Model seçimi — provider seçildikten SONRA o provider'ın model listesi gelsin
+MODELS=$(node_cfg "
+import { loadConfig } from './src/config.mjs';
+const cfg = loadConfig();
+const presets = cfg.models['$PROVIDER']?.presets ?? [];
+for (const p of presets) console.log(p.id);
+if (presets.length === 0) {
+  const d = cfg.providers['$PROVIDER']?.defaultModel;
+  if (d) console.log(d);
+}
+")
+
+if [[ $# -ge 2 ]]; then
+  MODEL="$2"
+  if [[ -z "$MODELS" ]] || ! grep -qx "$MODEL" <<< "$MODELS"; then
+    echo "HATA: '$MODEL' modeli $PROVIDER için listede yok." >&2
+    [[ -n "$MODELS" ]] && { echo "Geçerli modeller:" >&2; echo "$MODELS" >&2; }
+    exit 1
+  fi
+elif [[ -n "$MODELS" ]]; then
+  echo
+  echo "Model seçimi ($PROVIDER):"
+  select MODEL in $MODELS; do
+    [[ -n "$MODEL" ]] && break
+  done
+  if [[ -z "${MODEL:-}" ]]; then
+    MODEL="$(head -n1 <<< "$MODELS")"
+    echo "Seçim yapılmadı, ilk model kullanılacak: $MODEL" >&2
+  fi
+else
+  MODEL=""  # liste yoksa sunucu model kurallarını kullanır
+fi
+
+# --- 3. Sunucu ayarlarını çöz (host, port, token, anahtar kontrolü) ------
+readarray -t CFG < <(node_cfg "
+import { loadConfig } from './src/config.mjs';
+const cfg = loadConfig();
+const p = cfg.active('$PROVIDER');
+console.log('http://' + cfg.server.host + ':' + cfg.server.port);
+console.log(cfg.proxyToken || '');
+console.log(p?.fastModel ?? '');
+console.log(cfg.apiKeyOf(p) ? 'yes' : 'no');
+")
+SERVER_URL="${CFG[0]}"
+PROXY_TOKEN="${CFG[1]}"
+FAST_MODEL="${CFG[2]}"
+KEY_SET="${CFG[3]}"
+
+if [[ "$KEY_SET" != "yes" ]]; then
+  echo "UYARI: $PROVIDER için API anahtarı boş görünüyor (.env). Upstream istekleri 401 dönebilir." >&2
+fi
+
+# --- 4. Claude Code ortam değişkenleri -----------------------------------
+export DEFAULT_PROVIDER="$PROVIDER"
+export ANTHROPIC_BASE_URL="${SERVER_URL}/${PROVIDER}"
+export ANTHROPIC_AUTH_TOKEN="${PROXY_TOKEN:-appproxy-local-dev}"
+if [[ -n "${MODEL}" ]]; then
+  export ANTHROPIC_MODEL="$MODEL"
+fi
+if [[ -n "$FAST_MODEL" ]]; then
+  export ANTHROPIC_SMALL_FAST_MODEL="$FAST_MODEL"
+fi
+
+echo
+echo "=========================================================="
+echo " appProxy başlıyor — ÖN PLANDA (durdurmak için Ctrl+C)"
+echo "=========================================================="
+echo "  Provider : $PROVIDER"
+echo "  Model    : ${MODEL:-<sunucu model kuralları belirler>}"
+echo "  Adres    : $ANTHROPIC_BASE_URL"
+echo
+echo "Claude Code'u başka bir terminalde çalıştırmak için:"
+echo "  export ANTHROPIC_BASE_URL=\"$ANTHROPIC_BASE_URL\""
+echo "  export ANTHROPIC_AUTH_TOKEN=\"$ANTHROPIC_AUTH_TOKEN\""
+[[ -n "${MODEL}" ]] && echo "  export ANTHROPIC_MODEL=\"$MODEL\""
+echo
+
+# --- 5. Proxy'yi ÖN PLANDA başlat (arka plana düşmez) --------------------
+exec node src/server.mjs

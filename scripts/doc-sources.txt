@@ -1,0 +1,51 @@
+# appProxy — resmî doküman kaynak listesi
+# Biçim: <kind>|<url>|<docs/ altındaki hedef yol>
+# kind: md (markdown), txt (düz metin), html (HTML -> metne çevrilir), json (ham JSON)
+# Yalnızca birinci elden resmî kaynaklar (Anthropic, Google, NVIDIA, OpenRouter, Cline).
+#
+# ---- Anthropic · Claude Code (gateway sözleşmesi, env değişkenleri, model ayarları) ----
+md|https://code.claude.com/docs/en/llm-gateway-protocol.md|anthropic/claude-code/llm-gateway-protocol.md
+md|https://code.claude.com/docs/en/llm-gateway.md|anthropic/claude-code/llm-gateway.md
+md|https://code.claude.com/docs/en/llm-gateway-connect.md|anthropic/claude-code/llm-gateway-connect.md
+md|https://code.claude.com/docs/en/llm-gateway-rollout.md|anthropic/claude-code/llm-gateway-rollout.md
+md|https://code.claude.com/docs/en/gateways.md|anthropic/claude-code/gateways.md
+md|https://code.claude.com/docs/en/env-vars.md|anthropic/claude-code/env-vars.md
+md|https://code.claude.com/docs/en/model-config.md|anthropic/claude-code/model-config.md
+md|https://code.claude.com/docs/en/settings.md|anthropic/claude-code/settings.md
+md|https://code.claude.com/docs/en/settings-reference.md|anthropic/claude-code/settings-reference.md
+txt|https://code.claude.com/docs/llms.txt|anthropic/claude-code/llms.txt
+# ---- Anthropic · Messages API (çevirinin hedef formatı) ----
+md|https://platform.claude.com/docs/en/api/messages.md|anthropic/api/messages.md
+md|https://platform.claude.com/docs/en/api/beta-headers.md|anthropic/api/beta-headers.md
+md|https://platform.claude.com/docs/en/docs/build-with-claude/streaming.md|anthropic/api/streaming.md
+md|https://platform.claude.com/docs/en/api/errors.md|anthropic/api/errors.md
+txt|https://platform.claude.com/llms.txt|anthropic/api/llms.txt
+# ---- Google Gemini (native REST + OpenAI uyumluluğu + resmî makine şeması) ----
+html|https://ai.google.dev/api/generate-content|gemini/generate-content-rest.md
+html|https://ai.google.dev/gemini-api/docs/openai|gemini/openai-compatibility.md
+html|https://ai.google.dev/gemini-api/docs/models|gemini/models.md
+html|https://ai.google.dev/gemini-api/docs/function-calling|gemini/function-calling.md
+html|https://ai.google.dev/gemini-api/docs/thinking|gemini/thinking.md
+html|https://ai.google.dev/gemini-api/docs/text-generation|gemini/text-generation.md
+html|https://ai.google.dev/gemini-api/docs/tokens|gemini/token-counting.md
+json|https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta|gemini/generativelanguage-v1beta-discovery.json
+# ---- NVIDIA NIM (hosted OpenAI-uyumlu + self-hosted Anthropic-uyumlu) ----
+html|https://docs.nvidia.com/nim/large-language-models/latest/reference/api-reference.html|nvidia/nim-api-reference.md
+html|https://docs.nvidia.com/nim/large-language-models/latest/ai-assistant-integrations/claude-code.html|nvidia/use-claude-code-with-nim.md
+html|https://docs.nvidia.com/nim/large-language-models/latest/ai-assistant-integrations/codex-cli.html|nvidia/use-codex-cli-with-nim.md
+html|https://docs.api.nvidia.com/nim/reference/llm-apis|nvidia/nim-llm-apis.md
+json|https://integrate.api.nvidia.com/v1/models|nvidia/hosted-models-snapshot.json
+# ---- OpenRouter (Anthropic Messages API + Claude Code kılavuzu) ----
+md|https://openrouter.ai/docs/api-reference/overview.md|openrouter/api-reference-overview.md
+md|https://openrouter.ai/docs/api/api-reference/anthropic-messages/create-a-message.md|openrouter/anthropic-messages-create-a-message.md
+md|https://openrouter.ai/docs/cookbook/coding-agents/claude-code-integration.md|openrouter/claude-code-integration.md
+md|https://openrouter.ai/docs/guides/community/anthropic-agent-sdk.md|openrouter/anthropic-agent-sdk.md
+md|https://openrouter.ai/docs/guides/routing/provider-selection.md|openrouter/provider-selection.md
+txt|https://openrouter.ai/docs/llms.txt|openrouter/llms.txt
+json|https://openrouter.ai/openapi.json|openrouter/openapi.json
+# ---- Cline (aynı proxy'yi kullanabilecek istemcinin resmî sağlayıcı ayarları) ----
+txt|https://docs.cline.bot/llms.txt|cline/llms.txt
+md|https://docs.cline.bot/provider-config/anthropic.md|cline/provider-anthropic.md
+md|https://docs.cline.bot/provider-config/google-gemini.md|cline/provider-google-gemini.md
+md|https://docs.cline.bot/provider-config/openrouter.md|cline/provider-openrouter.md
+md|https://docs.cline.bot/provider-config/openai-compatible.md|cline/provider-openai-compatible.md

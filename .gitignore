@@ -1,0 +1,17 @@
+# Secrets — never committed, never logged
+.env
+.env.local
+
+# Runtime artifacts
+logs/
+run/
+tmp/
+*.log
+*.pid
+
+# Node (project has no dependencies, but keep it tidy)
+node_modules/
+
+# OS noise
+.DS_Store
+Thumbs.db

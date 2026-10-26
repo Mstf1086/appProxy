@@ -1,0 +1,842 @@
+<!-- source: https://ai.google.dev/gemini-api/docs/models -->
+<!-- fetched: 2026-10-24T21:20:26Z -->
+<!-- official documentation mirror; do not edit by hand: run scripts/fetch-docs.sh -->
+
+Gemini 4 Argon is now available. [Try it out](https://aistudio.google.com/prompts/new_chat?model=gemini-4-argon).
+
+ -
+
+ [
+
+ Home
+
+ ](https://ai.google.dev/)
+
+ -
+
+ [
+
+ Gemini API
+
+ ](https://ai.google.dev/gemini-api)
+
+ -
+
+ [
+
+ Docs
+
+ ](https://ai.google.dev/gemini-api/docs)
+
+#
+ Models
+
+This guide introduces all the models available through the Gemini API.
+
+---
+
+## Gemini 4
+
+### Stable
+
+ [
+
+ auto_awesome
+
+### Gemini 4 Argon
+
+ Our flagship reasoning model with a unified 1M context window and long decodes up to 1M tokens.
+
+New Stable
+
+ ](/gemini-api/docs/models/gemini-4-argon)
+
+### All Gemini 4 models
+
+ | Model
+ | Endpoint
+
+ | [Gemini 4 Argon](/gemini-api/docs/models/gemini-4-argon)
+ |
+
+```
+gemini-4-argon
+```
+
+---
+
+## Gemini 3
+
+### Stable
+
+ [
+
+ spark
+
+### Gemini 3.8 Flash
+
+ Our most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows.
+
+New Stable
+
+ ](/gemini-api/docs/models/gemini-3.8-flash)
+
+ [
+
+ settings_voice
+
+### Gemini 3.8 Live
+
+ Default Live API model for most low-latency voice agent experiences without reasoning delays.
+
+New Stable
+
+ ](/gemini-api/docs/models/gemini-3.8-live)
+
+ [
+
+ psychology
+
+### Gemini 3.8 Live Extended Thinking
+
+ High-reasoning Live API model for voice interactions, recommended when higher background reasoning is required.
+
+New Stable
+
+ ](/gemini-api/docs/models/gemini-3.8-live-extended-thinking)
+
+ [
+
+ graphic_eq
+
+### Gemini 3.8 Flash TTS
+
+ Flagship creative text-to-speech model for studio-grade voice fidelity, expressive acting, Voice design, and Voice replication.
+
+New Stable
+
+ ](/gemini-api/docs/models/gemini-3.8-flash-tts)
+
+ [
+
+ graphic_eq
+
+### Gemini 3.8 Flash-Lite TTS
+
+ Fast, cost-efficient text-to-speech model for high-volume production, real-time voice agent cascades, and Voice replication.
+
+New Stable
+
+ ](/gemini-api/docs/models/gemini-3.8-flash-lite-tts)
+
+ [
+
+ spark
+
+### Gemini 3.6 Flash
+
+ Our previous-generation Flash model, balancing speed and multimodal capabilities across general agentic and everyday tasks.
+
+Stable
+
+ ](/gemini-api/docs/models/gemini-3.6-flash)
+ [
+
+ bolt
+
+### Gemini 3.5 Flash-Lite
+
+ Our fastest, most cost-effective 3.5 model for high-throughput execution.
+
+Stable
+
+ ](/gemini-api/docs/models/gemini-3.5-flash-lite)
+ [
+
+ bolt
+
+### Gemini 3.1 Flash-Lite
+
+ Frontier-class performance rivaling larger models at a fraction of the cost.
+
+Stable
+
+ ](/gemini-api/docs/models/gemini-3.1-flash-lite)
+ [
+
+ 🍌🍌
+
+### Nano Banana 2.1
+
+ High-efficiency image generation and editing model with improved visual quality, typography, and multi-turn consistency.
+
+New Stable
+
+ ](/gemini-api/docs/models/gemini-nano-banana-2.1)
+ [
+
+ 🍌🍌
+
+### Nano Banana 2
+
+ Powerful, high-efficiency image generation and editing, optimized for speed and high-volume use cases.
+
+Stable
+
+ ](/gemini-api/docs/models/gemini-3.1-flash-image)
+ [
+
+ 🍌
+
+### Nano Banana 2 Lite
+
+ Ultra-low latency and cost-effective image generation and editing, designed for high-volume interactive use cases.
+
+Stable
+
+ ](/gemini-api/docs/models/gemini-3.1-flash-lite-image)
+ [
+
+ 🍌
+
+### Nano Banana Pro
+
+ State-of-the-art image generation and editing models for highly contextual native image creation.
+
+Stable
+
+ ](/gemini-api/docs/models/gemini-3-pro-image)
+ [
+
+ speech_to_text
+
+### Gemini 3.5 Transcribe
+
+ Low-latency speech-to-text model with utterance-based language detection, speaker diarization, and word timestamps.
+
+New Stable
+
+ ](/gemini-api/docs/models/gemini-3.5-transcribe)
+ [
+
+ movie_filter
+
+### Gemini Omni Flash
+
+ Fast video generation, editing, keyframe interpolation, and extension with native audio.
+
+Stable
+
+ ](/gemini-api/docs/models/gemini-omni-flash)
+
+### Preview
+
+ [
+
+ spark
+
+### Gemini 3 Flash
+
+ Frontier-class performance rivaling larger models at a fraction of the cost.
+
+Preview
+
+ ](/gemini-api/docs/models/gemini-3-flash-preview)
+ [
+
+ translate
+
+### Gemini 3.5 Live Translate
+
+ Low-latency, real-time speech to speech translation model that supports 70+ languages.
+
+New
+
+ ](/gemini-api/docs/models/gemini-3.5-live-translate-preview)
+ [
+
+ settings_voice
+
+### Gemini 3.1 Flash Live
+
+ Legacy Live API preview model. We recommend updating to Gemini 3.8 Live.
+
+New
+
+ ](/gemini-api/docs/models/gemini-3.1-flash-live-preview)
+ [
+
+ graphic_eq
+
+### Gemini 3.1 Flash TTS
+
+ Legacy TTS preview model. We recommend updating to Gemini 3.8 Flash TTS or Gemini 3.8 Flash-Lite TTS.
+
+Preview
+
+ ](/gemini-api/docs/models/gemini-3.1-flash-tts-preview)
+
+### All Gemini 3 models
+
+ | Model
+ | Endpoint
+
+ | [Gemini 3.8 Flash](/gemini-api/docs/models/gemini-3.8-flash)
+ |
+
+```
+gemini-3.8-flash
+```
+
+ | [Gemini 3.8 Live](/gemini-api/docs/models/gemini-3.8-live)
+ |
+
+```
+gemini-3.8-live
+```
+
+ | [Gemini 3.8 Live Extended Thinking](/gemini-api/docs/models/gemini-3.8-live-extended-thinking)
+ |
+
+```
+gemini-3.8-live-extended-thinking
+```
+
+ | [Gemini 3.8 Flash TTS](/gemini-api/docs/models/gemini-3.8-flash-tts)
+ |
+
+```
+gemini-3.8-flash-tts
+```
+
+ | [Gemini 3.8 Flash-Lite TTS](/gemini-api/docs/models/gemini-3.8-flash-lite-tts)
+ |
+
+```
+gemini-3.8-flash-lite-tts
+```
+
+ | [Gemini 3.6 Flash](/gemini-api/docs/models/gemini-3.6-flash)
+ |
+
+```
+gemini-3.6-flash
+```
+
+ | [Gemini 3.5 Flash-Lite](/gemini-api/docs/models/gemini-3.5-flash-lite)
+ |
+
+```
+gemini-3.5-flash-lite
+```
+
+ | [Gemini 3.1 Flash-Lite](/gemini-api/docs/models/gemini-3.1-flash-lite)
+ |
+
+```
+gemini-3.1-flash-lite
+```
+
+ | [Nano Banana 2.1](/gemini-api/docs/models/gemini-nano-banana-2.1)
+ |
+
+```
+gemini-nano-banana-2.1
+```
+
+ | [Nano Banana 2](/gemini-api/docs/models/gemini-3.1-flash-image)
+ |
+
+```
+gemini-3.1-flash-image
+```
+
+ | [Nano Banana 2 Lite](/gemini-api/docs/models/gemini-3.1-flash-lite-image)
+ |
+
+```
+gemini-3.1-flash-lite-image
+```
+
+ | [Nano Banana Pro](/gemini-api/docs/models/gemini-3-pro-image)
+ |
+
+```
+gemini-3-pro-image
+```
+
+ | [Gemini 3.5 Transcribe](/gemini-api/docs/models/gemini-3.5-transcribe)
+ |
+
+```
+gemini-3.5-transcribegemini-3.5-transcribe-live
+```
+
+ | [Gemini Omni Flash](/gemini-api/docs/models/gemini-omni-flash)
+ |
+
+```
+gemini-omni-1.1-flash
+```
+
+ | [Gemini 3.1 Pro](/gemini-api/docs/models/gemini-3.1-pro-preview)
+ |
+
+```
+gemini-3.1-pro-preview
+```
+
+ | [Gemini 3 Flash](/gemini-api/docs/models/gemini-3-flash-preview)
+ |
+
+```
+gemini-3-flash-preview
+```
+
+ | [Gemini 3.5 Live Translate](/gemini-api/docs/models/gemini-3.5-live-translate-preview)
+ |
+
+```
+gemini-3.5-live-translate-preview
+```
+
+ | [Gemini 3.1 Flash Live](/gemini-api/docs/models/gemini-3.1-flash-live-preview)
+ |
+
+```
+gemini-3.1-flash-live-preview
+```
+
+ | [Gemini 3.1 Flash TTS](/gemini-api/docs/models/gemini-3.1-flash-tts-preview)
+ |
+
+```
+gemini-3.1-flash-tts-preview
+```
+
+## Gemini 2.5 Flash
+
+ | Model
+ | Description
+ | Endpoint
+
+ | [Gemini 2.5 Flash](/gemini-api/docs/models/gemini-2.5-flash)
+ | Our best price-performance model for low-latency, high-volume tasks that require reasoning.
+ |
+
+```
+gemini-2.5-flash
+```
+
+ | [Nano Banana](/gemini-api/docs/models/gemini-2.5-flash-image)
+ | State-of-the-art native image generation and editing designed for fast, creative workflows.
+ |
+
+```
+gemini-2.5-flash-image
+```
+
+ | [Gemini 2.5 Flash Live](/gemini-api/docs/models/gemini-2.5-flash-native-audio-preview-12-2025)
+ | Optimized for real-time conversational agents with sub-second native audio streaming.
+ |
+
+```
+gemini-2.5-flash-native-audio-preview-12-2025
+```
+
+ | [Gemini 2.5 Flash TTS](/gemini-api/docs/models/gemini-2.5-flash-preview-tts)
+ | Controllable text-to-speech audio generation with fine control over style and pacing.
+ |
+
+```
+gemini-2.5-flash-preview-tts
+```
+
+## Gemini 2.5 Flash-Lite
+
+ | Model
+ | Description
+ | Endpoint
+
+ | [Gemini 2.5 Flash-Lite](/gemini-api/docs/models/gemini-2.5-flash-lite)
+ | The fastest and most budget-friendly multimodal model in the 2.5 family.
+ |
+
+```
+gemini-2.5-flash-lite
+```
+
+## Gemini 2.5 Pro
+
+ | Model
+ | Description
+ | Endpoint
+
+ | [Gemini 2.5 Pro](/gemini-api/docs/models/gemini-2.5-pro)
+ | Our most advanced model for complex tasks, featuring deep reasoning and coding capabilities in the 2.5 family.
+ |
+
+```
+gemini-2.5-pro
+```
+
+ | [Gemini 2.5 Pro TTS](/gemini-api/docs/models/gemini-2.5-pro-preview-tts)
+ | High-fidelity speech synthesis optimized for quality in structured workflows like podcasts and audiobooks.
+ |
+
+```
+gemini-2.5-pro-preview-tts
+```
+
+## Audio models
+
+This section contains all audio models,
+including ones that may already be listed in other sections
+
+ | Model
+ | Description
+ | Endpoint
+
+ | [Gemini 3.8 Live](/gemini-api/docs/models/gemini-3.8-live)
+ | The default option for most low-latency voice agent experiences and real-time dialogue without reasoning delays.
+ |
+
+```
+gemini-3.8-live
+```
+
+ | [Gemini 3.8 Live Extended Thinking](/gemini-api/docs/models/gemini-3.8-live-extended-thinking)
+ | Our high-reasoning audio-to-audio model, recommended when higher background reasoning is required during live interactions.
+ |
+
+```
+gemini-3.8-live-extended-thinking
+```
+
+ | [Gemini 3.8 Flash TTS](/gemini-api/docs/models/gemini-3.8-flash-tts)
+ | Flagship creative text-to-speech model for studio-grade voice fidelity, expressive acting, and regional dialects across 130 languages.
+ |
+
+```
+gemini-3.8-flash-tts
+```
+
+ | [Gemini 3.8 Flash-Lite TTS](/gemini-api/docs/models/gemini-3.8-flash-lite-tts)
+ | Fast, cost-efficient text-to-speech model built for high-throughput production workloads across 101 languages.
+ |
+
+```
+gemini-3.8-flash-lite-tts
+```
+
+ | [Gemini 3.1 Flash Live](/gemini-api/docs/models/gemini-3.1-flash-live-preview)
+ | Legacy audio-to-audio preview model. We recommend updating to Gemini 3.8 Live.
+ |
+
+```
+gemini-3.1-flash-live-preview
+```
+
+ | [Gemini 3.1 Flash TTS](/gemini-api/docs/models/gemini-3.1-flash-tts-preview)
+ | Legacy text-to-speech preview model. We recommend updating to Gemini 3.8 Flash TTS or Gemini 3.8 Flash-Lite TTS.
+ |
+
+```
+gemini-3.1-flash-tts-preview
+```
+
+ | [Gemini 3.5 Transcribe](/gemini-api/docs/models/gemini-3.5-transcribe)
+ | Low-latency speech-to-text model with utterance-based language detection, speaker diarization, word-level timestamps, and custom vocabulary biasing.
+ |
+
+```
+gemini-3.5-transcribegemini-3.5-transcribe-live
+```
+
+ | [Gemini 2.5 Flash Live](/gemini-api/docs/models/gemini-2.5-flash-native-audio-preview-12-2025)
+ | Our flagship Live API model for low-latency, bidirectional voice and video agents with native audio reasoning.
+ |
+
+```
+gemini-2.5-flash-native-audio-preview-12-2025
+```
+
+ | [Gemini 2.5 Flash TTS](/gemini-api/docs/models/gemini-2.5-flash-preview-tts)
+ | Fast and controllable text-to-speech for low-latency, cost-efficient applications and real-time assistants.
+ |
+
+```
+gemini-2.5-flash-preview-tts
+```
+
+ | [Gemini 2.5 Pro TTS](/gemini-api/docs/models/gemini-2.5-pro-preview-tts)
+ | High-fidelity speech synthesis optimized for quality in structured workflows like podcasts and audiobooks.
+ |
+
+```
+gemini-2.5-pro-preview-tts
+```
+
+## Generative media models
+
+This section contains all generative media models,
+including ones that may already be listed in other sections
+
+ | Model
+ | Description
+ | Endpoint
+
+ | [Nano Banana 2.1](/gemini-api/docs/models/gemini-nano-banana-2.1)
+ | High-efficiency image generation and editing model with improved visual quality, typography, and multi-turn consistency.
+ |
+
+```
+gemini-nano-banana-2.1
+```
+
+ | [Nano Banana 2](/gemini-api/docs/models/gemini-3.1-flash-image)
+ | High-efficiency production-scale visual creation, combining the intelligence of the Gemini 3 series with lightning-fast generation speeds.
+ |
+
+```
+gemini-3.1-flash-image
+```
+
+ | [Nano Banana 2 Lite](/gemini-api/docs/models/gemini-3.1-flash-lite-image)
+ | Designed as the efficiency specialist of the image generation family, offering ultra-low latency and cost-effective image generation and editing.
+ |
+
+```
+gemini-3.1-flash-lite-image
+```
+
+ | [Nano Banana Pro](/gemini-api/docs/models/gemini-3-pro-image)
+ | A professional design engine with a reasoning core for studio-quality 4K visuals, complex layouts, and precise text rendering.
+ |
+
+```
+gemini-3-pro-image
+```
+
+ | [Gemini Omni Flash](/gemini-api/docs/models/gemini-omni-flash)
+ | Fast video generation, editing, keyframe interpolation, and extension with native audio.
+ |
+
+```
+gemini-omni-1.1-flash
+```
+
+ | [Nano Banana](/gemini-api/docs/models/gemini-2.5-flash-image)
+ | State-of-the-art native image generation and editing designed for fast, creative workflows.
+ |
+
+```
+gemini-2.5-flash-image
+```
+
+ | Imagen 4 (Shut down)
+ | Text-to-image model featuring fast and ultra-fast generation (shut down).
+ |
+
+```
+imagen-4.0-generate
+```
+
+## Music generation models
+
+This section contains all music generation models,
+including ones that may already be listed in other sections
+
+ | Model
+ | Description
+ | Endpoint
+
+ | [Lyria 3.5](/gemini-api/docs/models/lyria-3.5)
+ | Our flagship music generation model, optimized for full-length songs with complex structural coherence.
+ |
+
+```
+lyria-3.5
+```
+
+ | [Lyria 3 Clip](/gemini-api/docs/models/lyria-3-clip-preview)
+ | Optimized for generating short musical clips, loops, and previews up to 30 seconds.
+ |
+
+```
+lyria-3-clip-preview
+```
+
+ | [Lyria 3 Pro](/gemini-api/docs/models/lyria-3-pro-preview)
+ | Previous generation music generation model for full-length songs.
+ |
+
+```
+lyria-3-pro-preview
+```
+
+ | [Lyria RealTime](/gemini-api/docs/models/lyria-realtime-exp)
+ | High-fidelity music generation model providing granular creative control and real-time streaming capabilities.
+ |
+
+```
+lyria-realtime-exp
+```
+
+## Tool and agent models
+
+ | Model
+ | Description
+ | Endpoint
+
+ | [Gemini Deep Research](/gemini-api/docs/models/deep-research-preview-04-2026)
+ | An agentic model that autonomously plans and executes multi-step research across hundreds of sources to produce cited, interactive reports.
+ |
+
+```
+deep-research-preview-04-2026
+```
+
+ | [Gemini Deep Research Max](/gemini-api/docs/models/deep-research-max-preview-04-2026)
+ | Maximum comprehensiveness for automated context gathering and synthesis across hundreds of sources.
+ |
+
+```
+deep-research-max-preview-04-2026
+```
+
+ | [Antigravity Agent](/gemini-api/docs/models/antigravity-preview-09-2026)
+ | A general-purpose managed agent that autonomously plans, reasons, runs code, manages files, and browses the web inside a secure, isolated Linux sandbox.
+ |
+
+```
+antigravity-preview-09-2026
+```
+
+## Specialized task models
+
+ | Model
+ | Description
+ | Endpoint
+
+ | [Gemini Embedding 2](/gemini-api/docs/models/gemini-embedding-2)
+ | Our first multimodal embedding model, mapping text, images, video, audio, and PDFs into a unified embedding space for advanced semantic search and RAG systems.
+ |
+
+```
+gemini-embedding-2-preview
+```
+
+ | [Gemini Embedding](/gemini-api/docs/models/gemini-embedding-001)
+ | High-dimensional vector representations for advanced semantic search, text classification, and RAG systems.
+ |
+
+```
+gemini-embedding-001
+```
+
+ | [Gemini Robotics ER 2](/gemini-api/docs/robotics-overview)
+ | Embodied reasoning model delivering advanced video understanding, spatial reasoning, multi-step tool orchestration, and multi-robot collaboration for robotics tasks.
+ |
+
+```
+gemini-robotics-er-2-preview
+```
+
+## Previous models
+
+ | Model
+ | Description
+ | Endpoint
+
+ | [Gemini Robotics ER 1.6](/gemini-api/docs/models/gemini-robotics-er-1.6-preview) (Shut down)
+ | Advanced embodied reasoning model that understands physical spaces and plans multi-step tasks for robotic agents with new capabilities like instrument reading, improved spatial and physical reasoning.
+ |
+
+```
+gemini-robotics-er-1.6-preview
+```
+
+ | [Computer Use](/gemini-api/docs/models/gemini-2.5-computer-use-preview-10-2025) (Shut down)
+ | A specialized model that can "see" a digital screen and perform UI actions like clicking, typing, and navigating to automate complex browser tasks.
+ |
+
+```
+gemini-2.5-computer-use-preview-10-2025
+```
+
+ | [Gemini 2.0 Flash](/gemini-api/docs/models/gemini-2.0-flash) (Shut down)
+ | Our second generation workhorse model, with next-gen features and improved capabilities, including superior speed, native tool use, and a 1M token context window.
+ |
+
+```
+gemini-2.0-flash
+```
+
+ | [Gemini 2.0 Flash-Lite](/gemini-api/docs/models/gemini-2.0-flash-lite) (Shut down)
+ | Our fastest second generation model, optimized for cost efficiency and low latency.
+ |
+
+```
+gemini-2.0-flash-lite
+```
+
+ | [Gemini 3.1 Flash-Lite Preview](/gemini-api/docs/models/gemini-3.1-flash-lite-preview) (Shut down)
+ | Our most cost-efficient multimodal model, offering the fastest performance for high-frequency, lightweight tasks.
+ |
+
+```
+gemini-3.1-flash-lite-preview
+```
+
+ | [Gemini 3 Pro Preview](/gemini-api/docs/models/gemini-3-pro-preview) (Shut down)
+ | Our state-of-the-art reasoning model, with advanced multimodal understanding.
+ |
+
+```
+gemini-3-pro-preview
+```
+
+## Model version name patterns
+
+Gemini models are available in either stable, preview, latest, or
+experimental versions.
+
+### Stable
+
+Points to a specific stable model. Stable models usually don't change. Most
+production apps should use a specific stable model.
+
+For example: `gemini-3.6-flash`.
+
+### Preview
+
+Points to a preview model which may be used for production. Preview models will
+typically have billing enabled, might come with more restrictive rate limits and
+will be deprecated with at least 2 weeks notice.
+
+For example: `gemini-2.5-flash-preview-09-2025`.
+
+### Latest
+
+Points to the latest release for a specific model variation. This can be a
+stable, preview or experimental release. This alias will get hot-swapped with
+every new release of a specific model variation. For breaking changes, a
+2-week notice will be provided through email before the version behind
+latest is changed.
+
+For example: `gemini-flash-latest`.
+
+### Experimental
+
+Points to an experimental model which will typically be not be suitable for
+production use and come with more restrictive rate limits. We release
+experimental models to gather feedback and get our latest updates into the hands
+of developers quickly.
+
+Experimental models are not stable and availability of model endpoints is
+subject to change.
+
+## Model deprecations
+
+For information about model deprecations, visit the [Gemini deprecations](/gemini-api/docs/deprecations) page.

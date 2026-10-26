@@ -1,0 +1,76 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8790,
+    "logDir": "logs",
+    "logBodies": false,
+    "maxBodyBytes": 33554432,
+    "upstreamTimeoutMs": 600000,
+    "keepAlivePingMs": 15000,
+    "modelDiscovery": true
+  },
+  "providers": {
+    "gemini": {
+      "kind": "gemini",
+      "baseUrl": "https://generativelanguage.googleapis.com",
+      "apiVersion": "v1beta",
+      "apiKeyEnv": "GEMINI_API_KEY",
+      "apiKeyLocation": "header:x-goog-api-key",
+      "defaultModel": "gemini-3.8-flash",
+      "fastModel": "gemini-3.5-flash-lite",
+      "maxOutputTokens": 65536,
+      "thinking": {
+        "mode": "auto",
+        "budgetTokens": 8192,
+        "includeThoughts": false
+      },
+      "safetySettings": [],
+      "toolChoiceModeMap": {
+        "auto": "AUTO",
+        "any": "ANY",
+        "tool": "ANY",
+        "none": "NONE"
+      }
+    },
+    "openrouter": {
+      "kind": "anthropic",
+      "baseUrl": "https://openrouter.ai/api",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "defaultModel": "anthropic/claude-sonnet-5.5",
+      "fastModel": "anthropic/claude-haiku-5.5",
+      "extraHeaders": {
+        "X-Title": "appProxy (Claude Code)"
+      },
+      "normalizeAdaptiveThinking": true,
+      "docNote": "Resmi Claude Code kurulumu: ANTHROPIC_BASE_URL=https://openrouter.ai/api (docs/openrouter/claude-code-integration.md)"
+    },
+    "refuseless": {
+      "kind": "openai",
+      "baseUrl": "https://api.refuseless.com/v1",
+      "apiKeyEnv": "REFUSELESS_API_KEY",
+      "defaultModel": "glm-5.3-abliterated",
+      "fastModel": "glm-5.3-flash-abliterated",
+      "maxTokensField": "max_tokens",
+      "streamIncludeUsage": true,
+      "mapReasoningToThinking": true
+    },
+    "cohere": {
+      "kind": "cohere",
+      "baseUrl": "https://api.cohere.com",
+      "apiKeyEnv": "CO_API_KEY",
+      "defaultModel": "command-a-plus-05-2026",
+      "fastModel": "command-r7b-12-2024",
+      "docNote": "Cohere v2 chat (docs.cohere.com/reference/chat); bearer auth"
+    },
+    "apinex": {
+      "kind": "openai",
+      "baseUrl": "https://api.apinex.bond/v1",
+      "apiKeyEnv": "APINEX_API_KEY",
+      "maxTokensField": "max_tokens",
+      "streamIncludeUsage": true,
+      "mapReasoningToThinking": true,
+      "defaultModel": "claude-fable-5.1",
+      "docNote": "apinex: sihirbaz ile eklendi (bin/proxy-run)"
+    }
+  }
+}

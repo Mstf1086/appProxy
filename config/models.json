@@ -1,0 +1,242 @@
+{
+  "_comment": [
+    "Claude Code hangi model ID'sini isterse istesin, proxy onu saglayicinin gercek",
+    "model kimligine esler. Kurallar sirayla denenir (glob *, ?).",
+    "'passthroughPrefixes': istenen model bu oneklerden biriyle basliyorsa dokunulmaz",
+    "(kullanici zaten saglayici modelini vermis demektir: claude-gemini --model gemini-3.6-flash).",
+    "Model kimlikleri resmi kaynaklardan alinmistir:",
+    "  gemini  -> docs/gemini/models.md",
+    "  nvidia  -> docs/nvidia/hosted-models-snapshot.json",
+    "  openrouter -> https://openrouter.ai/api/v1/models"
+  ],
+  "gemini": {
+    "passthroughPrefixes": [
+      "gemini-",
+      "gemma-"
+    ],
+    "rules": [
+      {
+        "match": "*haiku*",
+        "model": "gemini-3.5-flash-lite"
+      },
+      {
+        "match": "*opus*",
+        "model": "gemini-3.8-flash"
+      },
+      {
+        "match": "*sonnet*",
+        "model": "gemini-3.8-flash"
+      },
+      {
+        "match": "*fable*",
+        "model": "gemini-3.8-flash"
+      },
+      {
+        "match": "*",
+        "model": "gemini-3.8-flash"
+      }
+    ],
+    "presets": [
+      {
+        "id": "gemini-3.8-flash",
+        "label": "Gemini 3.8 Flash",
+        "description": "Uzun soluklu kodlama ve ajan isleri icin en guclu Flash"
+      },
+      {
+        "id": "gemini-3.6-flash",
+        "label": "Gemini 3.6 Flash",
+        "description": "Dengeli hiz / multimodal yetenek"
+      },
+      {
+        "id": "gemini-3.5-flash-lite",
+        "label": "Gemini 3.5 Flash-Lite",
+        "description": "Arka plan gorevleri icin en hizli ve ucuz"
+      },
+      {
+        "id": "gemini-4-argon",
+        "label": "Gemini 4 Argon",
+        "description": "En yeni model (onizleme)"
+      }
+    ]
+  },
+  "openrouter": {
+    "passthroughPrefixes": [
+      "anthropic/",
+      "google/",
+      "openai/",
+      "z-ai/",
+      "deepseek/",
+      "qwen/",
+      "moonshotai/",
+      "nvidia/",
+      "meta-llama/",
+      "mistralai/"
+    ],
+    "rules": [
+      {
+        "match": "*haiku*",
+        "model": "anthropic/claude-haiku-5.5"
+      },
+      {
+        "match": "*opus*",
+        "model": "anthropic/claude-opus-5.5"
+      },
+      {
+        "match": "*sonnet*",
+        "model": "anthropic/claude-sonnet-5.5"
+      },
+      {
+        "match": "*fable*",
+        "model": "anthropic/claude-fable-5.1"
+      },
+      {
+        "match": "*",
+        "model": "anthropic/claude-sonnet-5.5"
+      }
+    ],
+    "presets": [
+      {
+        "id": "anthropic/claude-sonnet-5.5",
+        "label": "Claude Sonnet 5.5",
+        "description": "Claude Code ile en uyumlu (Anthropic 1P)"
+      },
+      {
+        "id": "anthropic/claude-opus-5.5",
+        "label": "Claude Opus 5.5",
+        "description": "En yetenekli, en pahalı"
+      },
+      {
+        "id": "anthropic/claude-haiku-5.5",
+        "label": "Claude Haiku 5.5",
+        "description": "Hızlı arka plan görevleri"
+      },
+      {
+        "id": "google/gemini-3.8-flash",
+        "label": "Gemini 3.8 Flash",
+        "description": "OpenRouter üzerinden Gemini"
+      },
+      {
+        "id": "z-ai/glm-5.3",
+        "label": "GLM 5.3",
+        "description": "Ekonomik kodlama modeli"
+      },
+      {
+        "id": "deepseek/deepseek-v4-pro-0813",
+        "label": "DeepSeek V4 Pro",
+        "description": "Güçlü açık model"
+      }
+    ]
+  },
+  "refuseless": {
+    "passthroughPrefixes": [
+      "glm-5.3-"
+    ],
+    "rules": [
+      {
+        "match": "*flash*",
+        "model": "glm-5.3-flash-abliterated"
+      },
+      {
+        "match": "*",
+        "model": "glm-5.3-abliterated"
+      }
+    ],
+    "presets": [
+      {
+        "id": "glm-5.3-abliterated",
+        "label": "GLM 5.3 Abliterated",
+        "description": "Frontier coding and cyber"
+      },
+      {
+        "id": "glm-5.3-flash-abliterated",
+        "label": "GLM 5.3 Flash Abliterated",
+        "description": "Cost-effective"
+      }
+    ]
+  },
+  "cohere": {
+    "passthroughPrefixes": [
+      "command-"
+    ],
+    "rules": [
+      {
+        "match": "*haiku*",
+        "model": "command-r7b-12-2024"
+      },
+      {
+        "match": "*",
+        "model": "command-a-plus-05-2026"
+      }
+    ],
+    "presets": [
+      {
+        "id": "command-a-plus-05-2026",
+        "label": "Command A+ (05-2026)",
+        "description": "Guncel en guclu Cohere modeli"
+      },
+      {
+        "id": "command-a-03-2025",
+        "label": "Command A (03-2025)",
+        "description": "Dengeli onceki nesil"
+      },
+      {
+        "id": "command-r7b-12-2024",
+        "label": "Command R7B",
+        "description": "Hizli/ucuz arka plan isleri icin"
+      }
+    ]
+  },
+  "apinex": {
+    "passthroughPrefixes": [
+      "free/"
+    ],
+    "rules": [
+      {
+        "match": "*",
+        "model": "claude-fable-5.1"
+      }
+    ],
+    "presets": [
+      {
+        "id": "claude-fable-5.1",
+        "label": "claude-fable-5.1",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "claude-opus-5.5",
+        "label": "claude-opus-5.5",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "claude-sonnet-5.5",
+        "label": "claude-sonnet-5.5",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "deepseek-v4-flash",
+        "label": "deepseek-v4-flash",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "deepseek-v4-pro",
+        "label": "deepseek-v4-pro",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "deepseek-v4.1-flash",
+        "label": "deepseek-v4.1-flash",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "drex-v2.0",
+        "label": "drex-v2.0",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "free/claude-opus-4.6",
+        "label": "free/claude-opus-4.6",
+        "description": "sihirbaz ile eklendi"
+      }
+    ]
+  }
+}

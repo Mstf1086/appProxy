@@ -1,0 +1,514 @@
+#!/usr/bin/env bash
+# proxy-run — provider seç, provider'ın TÜM modellerini listele, model seç,
+# istemci (Cline / Claude Code) seç ve seçime göre başlat.
+#
+# Kullanım:
+#   proxy-run                              # interaktif: provider -> model -> istemci
+#   proxy-run <provider>                   # provider sabit, model + istemci interaktif
+#   proxy-run <provider> <model>           # model sabit, istemci interaktif
+#   proxy-run <provider> <model> --client cline   # soru sormadan Cline'ı başlat
+#   proxy-run <provider> <model> --client claude  # soru sormadan Claude Code'u başlat
+#   proxy-run <provider> <model> --client none    # sadece proxy'yi başlat
+#   proxy-run <provider> --list            # sadece modelleri listele
+#   proxy-run <provider> --filter kimi     # model listesini filtrele
+#   proxy-run --foreground <provider> <model>
+#   proxy-run status | stop
+#   proxy-run models [provider]
+#
+# OpenAI-uyumlu endpoint: http://127.0.0.1:8790/<provider>/v1/chat/completions
+# Anthropic endpoint    : http://127.0.0.1:8790/<provider>/v1/messages
+set -euo pipefail
+
+ORIG_PWD="$PWD"
+cd "$(dirname "$0")/.."
+
+RUN_DIR="run"
+PID_FILE="$RUN_DIR/proxy-run.pid"
+PROVIDER_FILE="$RUN_DIR/proxy-run.provider"
+MODEL_FILE="$RUN_DIR/proxy-run.model"
+HOST_FILE="$RUN_DIR/proxy-run.host"
+PORT_FILE="$RUN_DIR/proxy-run.port"
+OUT_FILE="logs/proxy-run.out"
+mkdir -p "$RUN_DIR" logs
+
+node_cfg() {
+  node --input-type=module -e "$1"
+}
+
+usage() {
+  cat <<'USAGE'
+proxy-run — appProxy'yi provider/model seçerek başlatır ve istenirse istemciyi açar.
+
+Kullanım:
+  proxy-run                                     interaktif provider + model + istemci seçimi
+  proxy-run <provider>                          provider sabit, model + istemci interaktif
+  proxy-run <provider> <model>                  model sabit, istemci interaktif
+  proxy-run <provider> <model> --client cline   proxy + Cline CLI'ı başlat
+  proxy-run <provider> <model> --client claude  proxy + Claude Code'u başlat
+  proxy-run <provider> <model> --client none   sadece proxy'yi başlat
+  proxy-run <provider> --list                   sadece modelleri listele
+  proxy-run <provider> --filter <metin>         model listesini filtrele
+  proxy-run --foreground <provider> <model>     proxy'yi ön planda çalıştır
+  proxy-run add                                  yeni provider ekleme sihirbazı
+  proxy-run remove [provider]                     provider'ı config'den kaldır (onay ister)
+  proxy-run models [provider]                   modelleri listele (proxy başlatmadan)
+  proxy-run status                              çalışan proxy'nin durumu
+  proxy-run stop                                 çalışan proxy'yi durdur
+
+Provider menüsünde "+ yeni provider ekle" seçeneği de vardır; sihirbaz bitince
+akış yeni provider ile devam eder (model listesi -> istemci seçimi -> başlat).
+
+Seçenekler:
+  -c, --client <cline|claude|none>  Model seçiminden sonra başlatılacak istemci
+  -f, --foreground                  Ön planda çalıştır (istemci seçimi yapılmaz)
+  -l, --list                        Model listesini yazdır ve çık
+      --filter <metin>              Model listesini büyük/küçük harf duyarsız filtrele
+      --host <host>                 PROXY_HOST değerini geçici olarak değiştir
+      --port <port>                 PROXY_PORT değerini geçici olarak değiştir
+  -h, --help                        Bu yardımı göster
+USAGE
+}
+
+stop_proxy() {
+  if [[ ! -f "$PID_FILE" ]]; then
+    echo "Çalışan proxy yok ($PID_FILE bulunamadı)."
+    return 0
+  fi
+  local pid
+  pid="$(cat "$PID_FILE")"
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "PID $pid çalışmıyor; dosyalar temizlendi."
+    rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"
+    return 0
+  fi
+  if [[ -r "/proc/$pid/cmdline" ]] && ! tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q 'src/server.mjs'; then
+    echo "PID $pid appProxy (src/server.mjs) değil; dokunulmadı." >&2
+    return 1
+  fi
+  kill "$pid" 2>/dev/null || true
+  for _ in {1..30}; do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+  done
+  kill -9 "$pid" 2>/dev/null || true
+  rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"
+  echo "Proxy durduruldu (pid $pid)."
+}
+
+status_proxy() {
+  if [[ ! -f "$PID_FILE" ]]; then
+    echo "Proxy çalışmıyor."
+    return 1
+  fi
+  local pid host port provider model
+  pid="$(cat "$PID_FILE")"
+  host="$(cat "$HOST_FILE" 2>/dev/null || echo 127.0.0.1)"
+  port="$(cat "$PORT_FILE" 2>/dev/null || echo 8790)"
+  provider="$(cat "$PROVIDER_FILE" 2>/dev/null || echo '?')"
+  model="$(cat "$MODEL_FILE" 2>/dev/null || echo '?')"
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "PID dosyası var ama süreç yok: $pid"
+    return 1
+  fi
+  [[ "$host" == "0.0.0.0" || "$host" == "::" ]] && host="127.0.0.1"
+  echo "Proxy çalışıyor (pid $pid)."
+  echo "  Provider : $provider"
+  echo "  Model    : $model"
+  echo "  OpenAI   : http://$host:$port/$provider/v1"
+  echo "  Anthropic: http://$host:$port/$provider/v1"
+  echo -n "  Health   : "
+  curl -sf "http://$host:$port/health" || echo "(yanıt yok)"
+  echo
+}
+
+case "${1:-}" in
+  stop)
+    stop_proxy
+    exit $?
+    ;;
+  status)
+    status_proxy
+    exit $?
+    ;;
+  models)
+    shift
+    node src/cli.mjs models "${1:-}"
+    exit 0
+    ;;
+  add)
+    node src/cli.mjs add-provider
+    exit $?
+    ;;
+  remove|rm)
+    shift
+    node src/cli.mjs remove-provider "${1:-}"
+    exit $?
+    ;;
+  -h|--help|help)
+    usage
+    exit 0
+    ;;
+esac
+
+FOREGROUND=0
+LIST_ONLY=0
+FILTER=""
+PROVIDER=""
+MODEL=""
+HOST=""
+PORT=""
+CLIENT=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -f|--foreground)
+      FOREGROUND=1
+      shift
+      ;;
+    -l|--list)
+      LIST_ONLY=1
+      shift
+      ;;
+    --filter)
+      FILTER="${2:-}"
+      shift 2
+      ;;
+    --filter=*)
+      FILTER="${1#*=}"
+      shift
+      ;;
+    --client|-c)
+      CLIENT="${2:-}"
+      shift 2
+      ;;
+    --client=*)
+      CLIENT="${1#*=}"
+      shift
+      ;;
+    -c*)
+      CLIENT="${1#-c}"
+      shift
+      ;;
+    --host)
+      HOST="${2:-}"
+      shift 2
+      ;;
+    --host=*)
+      HOST="${1#*=}"
+      shift
+      ;;
+    --port)
+      PORT="${2:-}"
+      shift 2
+      ;;
+    --port=*)
+      PORT="${1#*=}"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -*)
+      echo "Bilinmeyen seçenek: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      if [[ -z "$PROVIDER" ]]; then
+        PROVIDER="$1"
+      elif [[ -z "$MODEL" ]]; then
+        MODEL="$1"
+      else
+        echo "Fazla argüman: $1" >&2
+        exit 1
+      fi
+      shift
+      ;;
+  esac
+done
+
+case "${CLIENT:-}" in
+  ""|cline|claude|none) ;;
+  *)
+    echo "HATA: --client yalnızca cline, claude veya none olabilir (aldım: $CLIENT)" >&2
+    exit 1
+    ;;
+esac
+
+[[ -n "$HOST" ]] && export PROXY_HOST="$HOST"
+[[ -n "$PORT" ]] && export PROXY_PORT="$PORT"
+
+if [[ "$FOREGROUND" == "1" && -n "${CLIENT:-}" ]]; then
+  echo "UYARI: --foreground ile --client birlikte kullanılamaz; istemci seçimi yok sayıldı." >&2
+  CLIENT=""
+fi
+
+ADD_OPTION="+ yeni provider ekle"
+
+load_providers() {
+  PROVIDERS="$(node_cfg "
+import { loadConfig } from './src/config.mjs';
+console.log(Object.keys(loadConfig().providers).join('\n'));
+")"
+}
+
+run_add_provider() {
+  echo
+  echo "Yeni provider ekleme sihirbazı (vazgeçmek için Ctrl+C):"
+  local wizard_stdout newprov
+  if ! wizard_stdout="$(node src/cli.mjs add-provider)"; then
+    echo "Provider eklenmedi." >&2
+    PROVIDER=""
+    return 1
+  fi
+  newprov="$(grep -E '^ADDED_PROVIDER=' <<< "$wizard_stdout" | tail -n1 | cut -d= -f2-)"
+  if [[ -z "$newprov" ]]; then
+    echo "Provider eklenmedi." >&2
+    PROVIDER=""
+    return 1
+  fi
+  load_providers
+  PROVIDER="$newprov"
+  echo "Provider eklendi: $PROVIDER"
+  return 0
+}
+
+PROVIDERS="$(node_cfg "
+import { loadConfig } from './src/config.mjs';
+console.log(Object.keys(loadConfig().providers).join('\\n'));
+")"
+
+if [[ -z "$PROVIDER" ]]; then
+  echo "Provider seçimi:"
+  select PROVIDER in $PROVIDERS "$ADD_OPTION"; do
+    [[ -n "$PROVIDER" ]] && break
+  done
+  if [[ "${PROVIDER:-}" == "$ADD_OPTION" ]]; then
+    PROVIDER=""
+    run_add_provider || true
+  fi
+  if [[ -z "${PROVIDER:-}" ]]; then
+    PROVIDER="$(head -n1 <<< "$PROVIDERS")"
+    echo "Seçim yapılmadı, ilk provider kullanılacak: $PROVIDER" >&2
+  fi
+else
+  if ! grep -qx "$PROVIDER" <<< "$PROVIDERS"; then
+    echo "HATA: bilinmeyen provider: $PROVIDER" >&2
+    echo "Geçerli seçenekler: $(echo "$PROVIDERS" | tr '\n' ' ')" >&2
+    exit 1
+  fi
+fi
+
+echo
+if [[ -n "$FILTER" ]]; then
+  echo "Modeller getiriliyor ($PROVIDER, filtre: $FILTER)..."
+else
+  echo "Modeller getiriliyor ($PROVIDER)..."
+fi
+MODEL_LIST="$(node src/cli.mjs models "$PROVIDER" 2> >(sed 's/^/  /' >&2) || true)"
+MODEL_LIST="$(printf '%s\n' "$MODEL_LIST" | sed '/^$/d')"
+
+if [[ -n "$FILTER" ]]; then
+  MODEL_LIST="$(grep -i -- "$FILTER" <<< "$MODEL_LIST" || true)"
+fi
+
+if [[ -z "$MODEL_LIST" ]]; then
+  echo "UYARI: upstream model listesi alınamadı; config/models.json presetleri kullanılacak." >&2
+  MODEL_LIST="$(node_cfg "
+import { loadConfig } from './src/config.mjs';
+const cfg = loadConfig();
+const presets = cfg.models['$PROVIDER']?.presets ?? [];
+for (const preset of presets) console.log(preset.id);
+")"
+  MODEL_LIST="$(printf '%s\n' "$MODEL_LIST" | sed '/^$/d')"
+fi
+
+if [[ -z "$MODEL_LIST" ]]; then
+  echo "HATA: $PROVIDER için model bulunamadı." >&2
+  exit 1
+fi
+
+if [[ "$LIST_ONLY" == "1" ]]; then
+  echo
+  echo "$MODEL_LIST"
+  exit 0
+fi
+
+if [[ -z "$MODEL" ]]; then
+  echo
+  echo "Model seçimi ($PROVIDER):"
+  select MODEL in $MODEL_LIST; do
+    [[ -n "$MODEL" ]] && break
+  done
+  if [[ -z "${MODEL:-}" ]]; then
+    MODEL="$(head -n1 <<< "$MODEL_LIST")"
+    echo "Seçim yapılmadı, ilk model kullanılacak: $MODEL" >&2
+  fi
+else
+  if ! grep -qxF -- "$MODEL" <<< "$MODEL_LIST"; then
+    echo "UYARI: '$MODEL' listede yok; yine de denenecek (proxy model eşlemesi uygular)." >&2
+  fi
+fi
+
+readarray -t CFG < <(node_cfg "
+import { loadConfig } from './src/config.mjs';
+const cfg = loadConfig();
+const p = cfg.active('$PROVIDER');
+console.log(cfg.server.host);
+console.log(String(cfg.server.port));
+console.log(cfg.proxyToken || '');
+console.log(p?.defaultModel ?? '');
+console.log(p?.fastModel ?? '');
+console.log(cfg.apiKeyOf(p) ? 'yes' : 'no');
+")
+
+if [[ ${#CFG[@]} -lt 6 ]]; then
+  echo "HATA: config okunamadı." >&2
+  exit 1
+fi
+
+CFG_HOST="${CFG[0]}"
+CFG_PORT="${CFG[1]}"
+PROXY_TOKEN="${CFG[2]}"
+DEFAULT_MODEL="${CFG[3]}"
+FAST_MODEL="${CFG[4]}"
+KEY_SET="${CFG[5]}"
+
+[[ -z "$MODEL" ]] && MODEL="$DEFAULT_MODEL"
+TOKEN_ARG="${PROXY_TOKEN:-appproxy-local-dev}"
+
+if [[ "$KEY_SET" != "yes" ]]; then
+  echo "UYARI: $PROVIDER için API anahtarı boş görünüyor (.env). Upstream 401 dönebilir." >&2
+fi
+
+CLIENT_HOST="$CFG_HOST"
+[[ "$CLIENT_HOST" == "0.0.0.0" || "$CLIENT_HOST" == "::" ]] && CLIENT_HOST="127.0.0.1"
+SERVER_URL="http://${CLIENT_HOST}:${CFG_PORT}"
+OPENAI_BASE="${SERVER_URL}/${PROVIDER}/v1"
+ANTHROPIC_BASE="${OPENAI_BASE}"
+
+# --- İstemci seçimi (model seçiminden SONRA) -------------------------------
+if [[ "$FOREGROUND" != "1" && -z "${CLIENT:-}" ]]; then
+  echo
+  echo "İstemci seçimi:"
+  select CLIENT_WORD in cline claude "sadece proxy"; do
+    [[ -n "$CLIENT_WORD" ]] && break
+  done
+  case "${CLIENT_WORD:-}" in
+    cline) CLIENT="cline" ;;
+    claude) CLIENT="claude" ;;
+    *) CLIENT="none" ;;
+  esac
+  if [[ -z "${CLIENT_WORD:-}" ]]; then
+    CLIENT="none"
+    echo "Seçim yapılmadı; sadece proxy başlatılacak." >&2
+  fi
+fi
+
+if [[ "$CLIENT" == "cline" ]] && ! command -v cline >/dev/null 2>&1; then
+  echo "UYARI: 'cline' bulunamadı; sadece proxy başlatılacak." >&2
+  CLIENT="none"
+fi
+if [[ "$CLIENT" == "claude" ]] && ! command -v claude >/dev/null 2>&1; then
+  echo "UYARI: 'claude' bulunamadı; sadece proxy başlatılacak." >&2
+  CLIENT="none"
+fi
+
+print_summary() {
+  echo
+  echo "=========================================================="
+  echo " appProxy hazır"
+  echo "=========================================================="
+  echo "  Provider : $PROVIDER"
+  echo "  Model    : $MODEL"
+  echo "  Proxy    : $SERVER_URL"
+  echo "  OpenAI   : $OPENAI_BASE  (POST /chat/completions, GET /models)"
+  echo "  Anthropic: $ANTHROPIC_BASE  (POST /messages)"
+}
+
+print_instructions() {
+  print_summary
+  echo
+  echo "Cline CLI (openai-compatible):"
+  echo '  export PROXY_TOKEN="$(grep -E "^PROXY_TOKEN=" .env | cut -d= -f2-)"'
+  echo "  cline auth openai-compatible -k \"\$PROXY_TOKEN\" -m \"$MODEL\" -b \"$OPENAI_BASE\""
+  echo "  cline -P openai-compatible -m \"$MODEL\" \"...\""
+  echo
+  echo "Claude Code (anthropic):"
+  echo "  export ANTHROPIC_BASE_URL=\"$ANTHROPIC_BASE\""
+  echo '  export ANTHROPIC_AUTH_TOKEN="$PROXY_TOKEN"'
+  echo "  export ANTHROPIC_MODEL=\"$MODEL\""
+  echo
+  echo "Durdurmak için : bin/proxy-run stop"
+  echo "Durum          : bin/proxy-run status"
+  echo
+}
+
+if [[ "$FOREGROUND" == "1" ]]; then
+  print_instructions
+  echo "Proxy ön planda başlıyor (Ctrl+C ile durdur)..."
+  exec node src/server.mjs "$PROVIDER"
+fi
+
+if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+  echo "UYARI: zaten çalışan bir proxy var (pid $(cat "$PID_FILE")). Önce 'bin/proxy-run stop' çalıştır." >&2
+  exit 1
+fi
+
+: > "$OUT_FILE"
+nohup node src/server.mjs "$PROVIDER" >> "$OUT_FILE" 2>&1 &
+PID=$!
+echo "$PID" > "$PID_FILE"
+echo "$PROVIDER" > "$PROVIDER_FILE"
+echo "$MODEL" > "$MODEL_FILE"
+echo "$CFG_HOST" > "$HOST_FILE"
+echo "$CFG_PORT" > "$PORT_FILE"
+
+echo "Proxy başlatıldı (pid $PID). Sağlık kontrolü..."
+for _ in {1..50}; do
+  if curl -sf "${SERVER_URL}/health" >/dev/null 2>&1; then
+    break
+  fi
+  if ! kill -0 "$PID" 2>/dev/null; then
+    echo "HATA: proxy başlatılamadı. Son loglar:" >&2
+    tail -n 30 "$OUT_FILE" >&2 || true
+    rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"
+    exit 1
+  fi
+  sleep 0.2
+done
+
+if ! curl -sf "${SERVER_URL}/health" >/dev/null 2>&1; then
+  echo "HATA: proxy 10 saniye içinde yanıt vermedi. Son loglar:" >&2
+  tail -n 30 "$OUT_FILE" >&2 || true
+  exit 1
+fi
+
+case "${CLIENT:-none}" in
+  cline)
+    print_summary
+    echo
+    echo "Cline yapılandırılıyor ve başlatılıyor..."
+    cline auth openai-compatible -k "$TOKEN_ARG" -m "$MODEL" -b "$OPENAI_BASE"
+    echo
+    echo "Cline başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop"
+    cd "$ORIG_PWD"
+    exec cline -P openai-compatible -m "$MODEL"
+    ;;
+  claude)
+    print_summary
+    echo
+    echo "Claude Code başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop"
+    export DEFAULT_PROVIDER="$PROVIDER"
+    export ANTHROPIC_BASE_URL="$ANTHROPIC_BASE"
+    export ANTHROPIC_AUTH_TOKEN="$TOKEN_ARG"
+    export ANTHROPIC_MODEL="$MODEL"
+    [[ -n "$FAST_MODEL" ]] && export ANTHROPIC_SMALL_FAST_MODEL="$FAST_MODEL"
+    cd "$ORIG_PWD"
+    exec claude
+    ;;
+  *)
+    print_instructions
+    ;;
+esac
