@@ -8,7 +8,7 @@ appProxy iki uyumlu API sunar; hangi aracı kullanırsan kullan aynı proxy'ye b
 | OpenAI model listesi | `GET /<provider>/v1/models` | Cline CLI, OpenAI SDK |
 | Anthropic Messages | `POST /<provider>/v1/messages` | **Claude Code**, Anthropic SDK |
 
-`<provider>` ∈ `gemini`, `nvidia`, `openrouter`, `refuseless` + sihirbazla eklenenler (yol belirtilmezse `DEFAULT_PROVIDER` kullanılır; `npm run doctor` ile listele).
+`<provider>` ∈ `gemini`, `nvidia`, `openrouter`, `cohere`, `refuseless` + sihirbazla eklenenler (yol belirtilmezse `DEFAULT_PROVIDER` kullanılır; `npm run doctor` ile listele).
 
 ## Hızlı başlangıç
 
@@ -129,12 +129,51 @@ claude
 | `404 not found` | Base URL `/v1` ile bitmiyor veya provider adı yanlış |
 | `unknown provider: ...` | `config/providers.json`'da olmayan isim; `npm run doctor` ile listele |
 | `upstream 401/402` | Sağlayıcı anahtarı eksik ya da kredi bitti (ör. Refuseless "Insufficient credits") |
+| `cohere` kullanımı | `config/models.json` içindeki `cohere` kurallarını kontrol edin; varsayılan model `command-a-plus-05-2026`, hızlı model `command-r7b-12-2024`, model ID'ler `command-` öneki ile başlar; `bin/proxy-run cohere --list` ile modelleri test edin. |
 | `503 high demand` | Upstream model geçici olarak yoğun; başka model dene (`--filter` ile) |
 | Model listesi boş | Anahtar yok / upstream kapalı → presetler kullanılır; `.env`'i kontrol et |
 | Ücretsiz `:free` model istense de kredi hatası (`credits have been used up`) | İstenen model `config/models.json`'daki `passthroughPrefixes`'e takılmadığı için `'*'` kuralıyla varsayılan (ücretli) modele eşlenmiş olabilir; modelin satıcı önekini (ör. `deepseek/`) `passthroughPrefixes`'e ekle — proxy loglarındaki `requestedModel` ile `model` alanlarını karşılaştır |
 | Yanlışlıkla eklenen provider | `bin/proxy-run remove <ad>` ile kaldır (onay ister; `config/providers.json`, `config/models.json` ve `.env` anahtar satırını temizler) |
 | Cline hep plan sunuyor | `~/.cline/data/settings/global-settings.json` içinde `planActMode: plan` olabilir; `cline -y` ile act modunda çalıştır veya ayarı değiştir |
 | Tool call sonrası 400 (yalnızca Gemini) | İmza enjeksiyonu devre dışı kalmış olamaz; `gemini.signature.injected` için proxy loglarına bak |
+
+
+## Kurallar
+
+appProxy **Cline CLI** ve **Claude Code** ile birlikte çalışmak üzere tasarlanmıştır; her iki aracı da
+aynı proxy'ye bağlanırsınız. Aşağıdaki kurallar her iki aracın kullanımında da geçerlidir.
+
+### 🔐 Anahtar güvenliği kuralları
+
+- `.env` asla git'e eklenmez (`.gitignore`) ve asla loglara/ekrana yazılmaz.
+- Gerçek API anahtarları koda gömülmez; yalnızca `.env`'den okunur.
+- `.env` içinde GEMINI_API_KEY, REFUSELESS_API_KEY ve APINEX_API_KEY açık metin yazıyor.
+  Bu anahtarlar `.gitignore` kapsamındadır ve git'e gitmez, ancak **açık metin içerikleri**
+  potansiyel bir sızıntı riskidir — kullanıyorsanız rotasyon yapın.
+- Provider eklerken anahtar `bin/proxy-run add` / `cli.mjs add-provider` sihirbazı aracılığıyla
+  girilir, yalnızca `.env`'ye yazılır; ekrana/loga asla yazılmaz.
+- `claude` clientı seçildiğinde otomatik olarak `ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_MODEL`
+  ortam değişkenleri ayarlanır; gerçek anahtarı koda girmeyin.
+
+### 💰 Token tasarrufu kuralları
+
+- **Hızlı model tercih edin:** Küçük düzeltmeler, soru-cevap ve arka plan görevleri için
+  her zaman `fastModel`'ı kullanın (claude-haiku, gemini-3.5-flash-lite, command-r7b).
+  Refactoring, planlama ve karmaşık görevler için `defaultModel`'ı seçin.
+- **Model eşleme kurallarının farkında olun:** `config/models.json`'daki eşleşme kuralları
+  Claude Code'un istediği model ID'sini sağlayıcının ucuz/hızlı modeline çevirebilir
+  (`*haiku*` → `gemini-3.5-flash-lite` gibi). Hedefiniz ucuz modelse eşleme kurallarını
+  kontrol edin; doğrudan model ID'si verilebilir (`-m claude-haiku-5.5` vb.).
+- **Reasoning bütçesini sınırlayın:** Gemini'de `thinkingConfig` için `budgetTokens`'ı
+  düşük tutun (varsayılan 8192); gereksiz derin düşünme token harcar.
+- **Prompt'u kısa ve net tutun:** Her istekte yalnızca gerekeni yazın; açıklama/kibarlık
+  kalıplarını gereksiz uzatmaktan kaçının. Gereksiz tekrarlı sorular yerine tek, net prompt kullanın.
+- **Claude Code ile `tool_result` uzunluğunu kontrol edin:** Büyük dosya/çıktı durumlarında
+  doğrudan çalıştırmak yerine `head`/`grep`/`wc` gibi ara araçlarla özet alın.
+- **Cline ile plan adımını kısaltın:** Görev basitse `/plan` devre dışı bırakın; `cline -y`
+  act modunda doğrudan işlem yapar.
+- **Log gürültüsünü kısıntı:** `PROXY_LOG_BODIES=0` varsayılandır; prompt gövdeleri loglanmaz.
+  Gerektiğinde `1` yapmayın — açık metin anahtarları içeren gövde sızıntısını önler.
 
 ## Testler
 

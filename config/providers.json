@@ -54,14 +54,6 @@
       "streamIncludeUsage": true,
       "mapReasoningToThinking": true
     },
-    "cohere": {
-      "kind": "cohere",
-      "baseUrl": "https://api.cohere.com",
-      "apiKeyEnv": "CO_API_KEY",
-      "defaultModel": "command-a-plus-05-2026",
-      "fastModel": "command-r7b-12-2024",
-      "docNote": "Cohere v2 chat (docs.cohere.com/reference/chat); bearer auth"
-    },
     "apinex": {
       "kind": "openai",
       "baseUrl": "https://api.apinex.bond/v1",
@@ -71,6 +63,15 @@
       "mapReasoningToThinking": true,
       "defaultModel": "claude-fable-5.1",
       "docNote": "apinex: sihirbaz ile eklendi (bin/proxy-run)"
+    },
+    "cohere": {
+      "kind": "cohere",
+      "baseUrl": "https://api.cohere.com",
+      "apiVersion": "v2",
+      "apiKeyEnv": "CO_API_KEY",
+      "defaultModel": "command-a-plus-05-2026",
+      "fastModel": "command-r7b-12-2024",
+      "docNote": "Cohere v2 chat: docs.cohere.com/reference/chat"
     }
   }
 }

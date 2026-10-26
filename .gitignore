@@ -8,6 +8,12 @@ run/
 tmp/
 *.log
 *.pid
+# Runtime artifacts (explicit per-extension)
+*.out
+*.host
+*.port
+*.model
+*.provider
 
 # Node (project has no dependencies, but keep it tidy)
 node_modules/

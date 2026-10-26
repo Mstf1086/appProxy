@@ -154,38 +154,6 @@
       }
     ]
   },
-  "cohere": {
-    "passthroughPrefixes": [
-      "command-"
-    ],
-    "rules": [
-      {
-        "match": "*haiku*",
-        "model": "command-r7b-12-2024"
-      },
-      {
-        "match": "*",
-        "model": "command-a-plus-05-2026"
-      }
-    ],
-    "presets": [
-      {
-        "id": "command-a-plus-05-2026",
-        "label": "Command A+ (05-2026)",
-        "description": "Guncel en guclu Cohere modeli"
-      },
-      {
-        "id": "command-a-03-2025",
-        "label": "Command A (03-2025)",
-        "description": "Dengeli onceki nesil"
-      },
-      {
-        "id": "command-r7b-12-2024",
-        "label": "Command R7B",
-        "description": "Hizli/ucuz arka plan isleri icin"
-      }
-    ]
-  },
   "apinex": {
     "passthroughPrefixes": [
       "free/"
@@ -236,6 +204,38 @@
         "id": "free/claude-opus-4.6",
         "label": "free/claude-opus-4.6",
         "description": "sihirbaz ile eklendi"
+      }
+    ]
+  },
+  "cohere": {
+    "passthroughPrefixes": [
+      "command-"
+    ],
+    "rules": [
+      {
+        "match": "*flash*",
+        "model": "command-r7b-12-2024"
+      },
+      {
+        "match": "*",
+        "model": "command-a-plus-05-2026"
+      }
+    ],
+    "presets": [
+      {
+        "id": "command-a-plus-05-2026",
+        "label": "Command A Plus",
+        "description": "En yetenekli Cohere model"
+      },
+      {
+        "id": "command-r7b-12-2024",
+        "label": "Command R7b",
+        "description": "Hızlı ve verimli"
+      },
+      {
+        "id": "command-r-plus-08-2026",
+        "label": "Command R+",
+        "description": "Tool calling & RAG odaklı"
       }
     ]
   }
