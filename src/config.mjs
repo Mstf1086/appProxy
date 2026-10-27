@@ -57,6 +57,16 @@ export function loadConfig({ root = ROOT } = {}) {
   server.port = Number.parseInt(readEnv(env, 'PROXY_PORT', String(server.port)), 10);
   server.logBodies = readEnv(env, 'PROXY_LOG_BODIES', server.logBodies ? '1' : '0') === '1';
 
+  // 429 (rate limit) bekle-yeniden-dene davranışı (src/rate-limit.mjs).
+  const rateWait = Number.parseInt(
+    readEnv(env, 'PROXY_RATE_LIMIT_WAIT_MS', String(server.rateLimitWaitMs ?? 30000)), 10
+  );
+  server.rateLimitWaitMs = Number.isFinite(rateWait) && rateWait >= 0 ? rateWait : 30000;
+  const rateRetries = Number.parseInt(
+    readEnv(env, 'PROXY_RATE_LIMIT_MAX_RETRIES', String(server.rateLimitMaxRetries ?? 2)), 10
+  );
+  server.rateLimitMaxRetries = Number.isFinite(rateRetries) && rateRetries >= 0 ? rateRetries : 2;
+
   const providers = providersFile.providers;
 
   // NVIDIA has two official transport modes; pick the active one.

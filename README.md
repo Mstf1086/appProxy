@@ -97,6 +97,11 @@ DEFAULT_PROVIDER=openrouter
 
 # Gövde loglama (0 = kapalı, 1 = açık) — varsayılan 0
 PROXY_LOG_BODIES=0
+
+# Upstream 429 (rate limit): bekle ve yeniden dene — tüm sağlayıcılar/modeller.
+# Upstream süre belirtirse (Retry-After / gövdedeki süre) onu kullanılır.
+PROXY_RATE_LIMIT_WAIT_MS=30000     # upstream süre belirtmezse beklenecek süre (ms)
+PROXY_RATE_LIMIT_MAX_RETRIES=2     # 429'da ek deneme sayısı
 ```
 
 ⚠️ **Güvenlik uyarısı:** `.env` içindeki anahtarlar açık metindir. `.env` dosyasını

@@ -143,6 +143,7 @@ claude
 | `404 not found` | Base URL `/v1` ile bitmiyor veya provider adı yanlış |
 | `unknown provider: ...` | `config/providers.json`'da olmayan isim; `npm run doctor` ile listele |
 | `upstream 401/402` | Sağlayıcı anahtarı eksik ya da kredi bitti (ör. Refuseless "Insufficient credits") |
+| `429 rate limit` | Proxy otomatik bekleyip yeniden dener: upstream süre belirtmişse onu, yoksa 30 sn (`PROXY_RATE_LIMIT_WAIT_MS`); deneme sayısı `PROXY_RATE_LIMIT_MAX_RETRIES` (öntanımlı 2). Denemeler tükenirse 429 istemciye iletilir. Log: `upstream.rateLimited` |
 | `cohere` kullanımı | `config/models.json` içindeki `cohere` kurallarını kontrol edin; varsayılan model `command-a-plus-05-2026`, hızlı model `command-r7b-12-2024`, model ID'ler `command-` öneki ile başlar; `bin/proxy-run cohere --list` ile modelleri test edin. |
 | `503 high demand` | Upstream model geçici olarak yoğun; başka model dene (`--filter` ile) |
 | Model listesi boş | Anahtar yok / upstream kapalı → presetler kullanılır; `.env`'i kontrol et |

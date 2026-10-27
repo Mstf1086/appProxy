@@ -8,6 +8,7 @@ import { handleAnthropicProvider } from './providers/anthropic.mjs';
 import { handleOpenAiProvider } from './providers/openai.mjs';
 import { handleGeminiProvider } from './providers/gemini.mjs';
 import { handleCohereProvider } from './providers/cohere.mjs';
+import { runWithRateLimitRetry } from './rate-limit.mjs';
 import {
   handleCohereCompatible,
   handleOpenAiCompatible,
@@ -209,21 +210,32 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  const helpers = responseHelpers(res);
+  const retryOpts = {
+    log,
+    provider: route.provider,
+    maxRetries: cfg.server.rateLimitMaxRetries,
+    defaultWaitMs: cfg.server.rateLimitWaitMs,
+    res,
+  };
   if (route.endpoint === 'models') {
     if (req.method !== 'GET') {
       sendOpenAiError(res, 405, 'method not allowed');
       return;
     }
-    const helpers = responseHelpers(res);
     try {
-      await handleOpenAiModels({
-        cfg,
-        providerName: route.provider,
-        providerCfg,
-        log,
-        res,
-        sendJsonResponse: helpers.sendJsonResponse,
-      });
+      await runWithRateLimitRetry(
+        () =>
+          handleOpenAiModels({
+            cfg,
+            providerName: route.provider,
+            providerCfg,
+            log,
+            res,
+            sendJsonResponse: helpers.sendJsonResponse,
+          }),
+        { ...retryOpts, model: '' }
+      );
     } catch (e) {
       log.error('request.failed', { message: e.message, status: e.status, endpoint: 'models' });
       if (!res.headersSent) sendOpenAiError(res, e.status || 502, e.message, { headers: e.headers });
@@ -255,7 +267,6 @@ const server = http.createServer(async (req, res) => {
 
   const apiKey = cfg.apiKeyOf(providerCfg);
   const modelRules = cfg.modelRules(route.provider);
-  const helpers = responseHelpers(res);
 
   if (route.endpoint === 'chat') {
     let prepared;
@@ -292,8 +303,10 @@ const server = http.createServer(async (req, res) => {
     });
 
     try {
-      if (providerCfg.kind === 'cohere') await handleCohereCompatible(ctx);
-      else await handleOpenAiCompatible(ctx);
+      await runWithRateLimitRetry(
+        () => (providerCfg.kind === 'cohere' ? handleCohereCompatible(ctx) : handleOpenAiCompatible(ctx)),
+        { ...retryOpts, model: prepared.meta.model }
+      );
       log.info('request.done', { protocol: 'openai', provider: route.provider, model: prepared.meta.model });
     } catch (e) {
       log.error('request.failed', {
@@ -341,10 +354,15 @@ const server = http.createServer(async (req, res) => {
   try {
     const useOpenAi = providerCfg.kind === 'openai';
     const useGemini = providerCfg.kind === 'gemini';
-    if (useGemini) await handleGeminiProvider(ctx);
-    else if (providerCfg.kind === 'cohere') await handleCohereProvider(ctx);
-    else if (useOpenAi) await handleOpenAiProvider(ctx);
-    else await handleAnthropicProvider(ctx);
+    await runWithRateLimitRetry(
+      () => {
+        if (useGemini) return handleGeminiProvider(ctx);
+        if (providerCfg.kind === 'cohere') return handleCohereProvider(ctx);
+        if (useOpenAi) return handleOpenAiProvider(ctx);
+        return handleAnthropicProvider(ctx);
+      },
+      { ...retryOpts, model: meta.model }
+    );
     log.info('request.done', { protocol: 'anthropic', provider: route.provider, model: meta.model });
   } catch (e) {
     log.error('request.failed', {
