@@ -100,13 +100,44 @@ function responseHelpers(res) {
     }
     const reader = response.body.getReader();
     const decoder = onText ? new TextDecoder() : null;
+    // SSE comment lines (": ping") are ignored by every compliant parser but keep
+    // the client connection alive when the upstream stays silent for a long time
+    // (reasoning models can think for tens of seconds before the first token —
+    // without pings the client aborts the idle turn).
+    const pingMs = Number(cfg.server.keepAlivePingMs ?? 15000) || 15000;
+    let pendingRead = null;
+    const readWithPing = async () => {
+      for (;;) {
+        if (!res.writableEnded) {
+          // Reuse the same pending read across ping cycles: issuing a second
+          // concurrent reader.read() would consume and drop a chunk.
+          if (!pendingRead) pendingRead = reader.read();
+          let timer;
+          const timeout = new Promise((resolve) => {
+            timer = setTimeout(() => resolve(null), pingMs);
+            timer.unref?.();
+          });
+          const result = await Promise.race([pendingRead, timeout]);
+          clearTimeout(timer);
+          if (result === null) {
+            res.write(': ping\n\n');
+            continue;
+          }
+          pendingRead = null;
+          return result;
+        }
+        const result = await reader.read();
+        pendingRead = null;
+        return result;
+      }
+    };
     const onClose = () => {
       reader.cancel().catch(() => {});
     };
     res.on('close', onClose);
     try {
       for (;;) {
-        const { done, value } = await reader.read();
+        const { done, value } = await readWithPing();
         if (done) break;
         if (decoder && onText) {
           try {

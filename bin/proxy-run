@@ -361,9 +361,10 @@ console.log(cfg.proxyToken || '');
 console.log(p?.defaultModel ?? '');
 console.log(p?.fastModel ?? '');
 console.log(cfg.apiKeyOf(p) ? 'yes' : 'no');
+console.log(p?.apiKeyEnv ?? '');
 ")
 
-if [[ ${#CFG[@]} -lt 6 ]]; then
+if [[ ${#CFG[@]} -lt 7 ]]; then
   echo "HATA: config okunamadı." >&2
   exit 1
 fi
@@ -374,6 +375,7 @@ PROXY_TOKEN="${CFG[2]}"
 DEFAULT_MODEL="${CFG[3]}"
 FAST_MODEL="${CFG[4]}"
 KEY_SET="${CFG[5]}"
+API_KEY_ENV="${CFG[6]}"
 
 [[ -z "$MODEL" ]] && MODEL="$DEFAULT_MODEL"
 TOKEN_ARG="${PROXY_TOKEN:-appproxy-local-dev}"
@@ -404,6 +406,16 @@ if [[ "$FOREGROUND" != "1" && -z "${CLIENT:-}" ]]; then
     CLIENT="none"
     echo "Seçim yapılmadı; sadece proxy başlatılacak." >&2
   fi
+fi
+
+# Anahtarı olmayan bir provider ile istemci başlatmak yalnızca hata üretir:
+# her istek upstream'ten 401 döner ve cline/claude hiçbir komut çalıştıramaz.
+# Bu yüzden istemci seçiminden sonra anahtar kontrolü sert bir hataya dönüşür.
+if [[ "$FOREGROUND" != "1" && "${CLIENT:-none}" != "none" && "$KEY_SET" != "yes" ]]; then
+  echo "HATA: $PROVIDER için API anahtarı boş — $CLIENT başlatılmadı." >&2
+  echo "  .env dosyasına ${API_KEY_ENV:-<sağlayıcı API anahtarı>} değerini ekleyin ve tekrar deneyin." >&2
+  echo "  Yalnızca proxy'yi başlatmak isterseniz: bin/proxy-run $PROVIDER --client none" >&2
+  exit 1
 fi
 
 if [[ "$CLIENT" == "cline" ]] && ! command -v cline >/dev/null 2>&1; then

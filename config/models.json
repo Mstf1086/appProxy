@@ -238,5 +238,121 @@
         "description": "Tool calling & RAG odaklı"
       }
     ]
+  },
+  "anyrouter": {
+    "passthroughPrefixes": [
+      "anyrouter/",
+      "apple/",
+      "baai/",
+      "cohere/",
+      "deepseek/",
+      "dots-studio/",
+      "fastino/",
+      "hal-x/",
+      "inception/",
+      "inclusionai/",
+      "intfloat/",
+      "jaredpalmer/"
+    ],
+    "rules": [
+      {
+        "match": "*",
+        "model": "anyrouter/auto"
+      }
+    ],
+    "presets": [
+      {
+        "id": "anyrouter/auto",
+        "label": "anyrouter/auto",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anyrouter/cowork",
+        "label": "anyrouter/cowork",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anyrouter/decision",
+        "label": "anyrouter/decision",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anyrouter/free",
+        "label": "anyrouter/free",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anyrouter/hermes",
+        "label": "anyrouter/hermes",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anyrouter/latest",
+        "label": "anyrouter/latest",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "apple/foundation-model",
+        "label": "apple/foundation-model",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "baai/bge-base-en-v1.5",
+        "label": "baai/bge-base-en-v1.5",
+        "description": "sihirbaz ile eklendi"
+      }
+    ]
+  },
+  "nvidia": {
+    "passthroughPrefixes": [
+      "nvidia/",
+      "meta/",
+      "mixtral/",
+      "google/",
+      "dpo/",
+      "nemotron/",
+      "z-ai/"
+    ],
+    "rules": [
+      {
+        "match": "*haiku*",
+        "model": "nvidia/llama-3.1-nemotron-51b-instruct"
+      },
+      {
+        "match": "*sonnet*",
+        "model": "nvidia/llama-3.1-nemotron-70b-instruct"
+      },
+      {
+        "match": "*opus*",
+        "model": "nvidia/llama-3.1-nemotron-70b-instruct"
+      },
+      {
+        "match": "*",
+        "model": "nvidia/llama-3.1-nemotron-70b-instruct"
+      }
+    ],
+    "presets": [
+      {
+        "id": "nvidia/llama-3.1-nemotron-70b-instruct",
+        "label": "Llama Nemotron 70B Instruct",
+        "description": "NVIDIA hosted, güçlü genel model"
+      },
+      {
+        "id": "nvidia/llama-3.1-nemotron-51b-instruct",
+        "label": "Llama Nemotron 51B Instruct",
+        "description": "NVIDIA hosted, dengeli model"
+      },
+      {
+        "id": "z-ai/glm-5.3",
+        "label": "GLM 5.3",
+        "description": "Z.ai GLM 5.3, reasoning + tool calling"
+      },
+      {
+        "id": "z-ai/glm-5.3-flash",
+        "label": "GLM 5.3 Flash",
+        "description": "Z.ai GLM 5.3 Flash, hızlı/ucuz"
+      }
+    ],
+    "defaultModel": null
   }
 }

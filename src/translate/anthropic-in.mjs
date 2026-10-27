@@ -48,6 +48,15 @@ export function resolveModel(requested, rules = {}, fallback = undefined) {
   }
   for (const rule of rules.rules ?? []) {
     if (globToRegExp(rule.match).test(model)) {
+      // A bare "*" catch-all must not silently swap vendor-prefixed upstream ids
+      // (e.g. "z-ai/glm-5.3", "meta/llama-3.2-90b-vision-instruct"): those are real
+      // provider model ids the client picked from the live model list. Forward them
+      // unchanged; if the upstream cannot serve them it returns a clear 4xx error.
+      // Explicit patterns ("*haiku*", "*sonnet*", ...) still remap as before, and
+      // alias-style ids without "/" (claude-sonnet-5.5, ...) still hit the catch-all.
+      if (rule.match === '*' && model.includes('/')) {
+        return { model, matched: 'passthrough' };
+      }
       return { model: rule.model ?? fallback ?? model, matched: rule.match };
     }
   }

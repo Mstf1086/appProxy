@@ -72,6 +72,27 @@
       "defaultModel": "command-a-plus-05-2026",
       "fastModel": "command-r7b-12-2024",
       "docNote": "Cohere v2 chat: docs.cohere.com/reference/chat"
+    },
+    "anyrouter": {
+      "kind": "openai",
+      "baseUrl": "https://anyrouter.dev/api/v1",
+      "apiKeyEnv": "ANYROUTER_API_KEY",
+      "maxTokensField": "max_tokens",
+      "streamIncludeUsage": true,
+      "mapReasoningToThinking": true,
+      "defaultModel": "anyrouter/auto",
+      "docNote": "anyrouter: sihirbaz ile eklendi (bin/proxy-run)"
+    },
+    "nvidia": {
+      "kind": "openai",
+      "baseUrl": "https://integrate.api.nvidia.com/v1",
+      "apiKeyEnv": "NVIDIA_API_KEY",
+      "maxTokensField": "max_tokens",
+      "streamIncludeUsage": true,
+      "mapReasoningToThinking": true,
+      "defaultModel": "nvidia/llama-3.1-nemotron-70b-instruct",
+      "fastModel": "z-ai/glm-5.3-flash",
+      "docNote": "nvidia: sihirbaz ile eklendi (bin/proxy-run)"
     }
   }
 }
