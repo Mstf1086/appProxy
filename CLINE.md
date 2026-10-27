@@ -20,23 +20,33 @@ Akış sırayla şöyle işler:
 
 1. **Provider seçimi** — `config/providers.json`'daki sağlayıcılar listelenir.
 2. **Model seçimi** — sağlayıcının TÜM modelleri canlı listelenir (`--filter` ile daraltılabilir).
-3. **İstemci seçimi** — `cline`, `claude` veya `sadece proxy`:
+3. **İstemci seçimi** — `cline`, `claude`, `pi cli` veya `sadece proxy`:
    - `cline` → proxy arka planda başlar, Cline'ın `openai-compatible` sağlayıcısı
      otomatik yapılandırılır (`cline auth ...`) ve Cline bu terminalde açılır.
    - `claude` → proxy arka planda başlar, `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` /
      `ANTHROPIC_MODEL` ortam değişkenleri ayarlanır ve Claude Code bu terminalde açılır.
+   - `pi cli` → proxy arka planda başlar; Pi CLI (https://pi.dev) seçilen
+     provider/model ile başlatılır ve doğrudan sağlayıcının ucuna bağlanır
+     (`pi --provider <p> --model <m>`). Proxy bir ara yüz değildir.
    - `sadece proxy` → yalnızca proxy başlar; el ile bağlanmak için ekrana hazır komutlar yazılır.
+
+Çalışan bir proxy varken `proxy-run` yeniden çalıştırılırsa önceki proxy'nin kapatılıp
+kapatılmayacağı sorulur: "kapat" derseniz önceki(ler) durur ve aynı port yeniden
+kullanılır; "açık kalsın" derseniz yeni proxy'ye bir isim verirsiniz ve boş bir
+portta açılır. İsimli örnekler `run/instances/<isim>/` ile izlenir.
 
 İstemciyi baştan belirtmek istersen:
 
 ```bash
 bin/proxy-run <provider> <model> --client cline    # Cline'ı başlat
 bin/proxy-run <provider> <model> --client claude   # Claude Code'u başlat
-bin/proxy-run <provider> <model> --client none    # sadece proxy
+bin/proxy-run <provider> <model> --client pi       # Pi CLI'ı (https://pi.dev) başlat
+bin/proxy-run <provider> <model> --client none     # sadece proxy
 ```
 
 Her iki istemci de proxy arkada çalışırken açılır; çıktıktan sonra proxy çalışmaya devam eder,
-durdurmak için `bin/proxy-run stop`. İstemci, `proxy-run`'ın çağrıldığı dizinde başlar.
+durdurmak için `bin/proxy-run stop` (isimli örnek için `bin/proxy-run stop <isim>`,
+tümü için `bin/proxy-run stop all`). İstemci, `proxy-run`'ın çağrıldığı dizinde başlar.
 
 El ile bağlanmak istersen (ör. ayrı bir terminalden):
 
@@ -62,15 +72,15 @@ claude
 | `bin/proxy-run` | İnteraktif provider + model seçimi, arka planda başlatma |
 | `bin/proxy-run <provider>` | Provider sabit, model listesi interaktif |
 | `bin/proxy-run <provider> <model>` | Model sabit, istemci interaktif |
-| `bin/proxy-run <provider> <model> --client cline\|claude\|none` | İstemciyi soru sormadan başlat |
+| `bin/proxy-run <provider> <model> --client cline\|claude\|pi\|none` | İstemciyi soru sormadan başlat |
 | `bin/proxy-run <provider> --list` | Sadece modelleri listele |
 | `bin/proxy-run <provider> --filter kimi` | Model listesini filtrele |
 | `bin/proxy-run --foreground <provider> <model>` | Ön planda çalıştır (Ctrl+C ile dur) |
 | `bin/proxy-run add` | Yeni provider ekleme sihirbazı (config + .env anahtar satırı) |
 | `bin/proxy-run remove [provider]` | Provider'ı config'den kaldır (onay ister; `.env` anahtar satırını da siler) |
 | `bin/proxy-run models [provider]` | Modelleri listele (proxy çalışmasa da olur) |
-| `bin/proxy-run status` | Çalışan proxy'nin durumu |
-| `bin/proxy-run stop` | Proxy'yi durdur |
+| `bin/proxy-run status` | Çalışan proxy örneklerinin durumu (varsayılan + isimli) |
+| `bin/proxy-run stop [isim\|all]` | Varsayılan / isimli / tüm örnekleri durdur |
 | `npm run proxy:run` | `bin/proxy-run` için npm kısayolu |
 | `npm run models` | `node src/cli.mjs models` |
 | `npm run urls` | Proxy/upstream URL özeti |

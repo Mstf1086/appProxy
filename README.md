@@ -121,8 +121,10 @@ En kolay yol (interaktif seçim):
 bin/proxy-run
 ```
 
-Sağlayıcı → model → istemci (Cline / Claude Code / sadece proxy) sırasıyla
-seçilir.
+Sağlayıcı → model → istemci (Cline / Claude Code / Pi CLI / sadece proxy)
+sırasıyla seçilir. İstemci adımında `pi cli` seçilirse Pi Coding Agent
+(https://pi.dev) seçilen provider/model ile başlatılır; Pi doğrudan
+sağlayıcının ucuna bağlanır, proxy arka planda çalışmaya devam eder.
 
 veya tek satırda başlatma:
 
@@ -131,7 +133,9 @@ bin/proxy-run openrouter           # provider + model + istemci interaktif
 bin/proxy-run openrouter gpt-4o    # provider + model sabit, istemci interaktif
 ```
 
-Proxy çalışırken durdurmak: `bin/proxy-run stop`. Durum: `bin/proxy-run status`.
+Proxy çalışırken durdurmak: `bin/proxy-run stop` (isimli örnek için
+`bin/proxy-run stop <isim>`, tümü için `bin/proxy-run stop all`). Durum:
+`bin/proxy-run status`.
 
 ### Adım 6 — Test Edin
 
@@ -192,6 +196,7 @@ cline -P openai-compatible -m "gemini-pro" "Merhaba"
 | `bin/proxy-run <provider> <model>` | Model sabit, istemci interaktif |
 | `bin/proxy-run <provider> <model> --client cline` | Proxy + Cline CLI başlat |
 | `bin/proxy-run <provider> <model> --client claude` | Proxy + Claude Code başlat |
+| `bin/proxy-run <provider> <model> --client pi` | Proxy + Pi CLI (https://pi.dev) başlat |
 | `bin/proxy-run <provider> <model> --client none` | Sadece proxy'yi başlat |
 | `bin/proxy-run <provider> --list` | Sadece modelleri listele |
 | `bin/proxy-run <provider> --filter <metin>` | Model listesini filtrele |
@@ -199,8 +204,29 @@ cline -P openai-compatible -m "gemini-pro" "Merhaba"
 | `bin/proxy-run add` | Yeni provider ekleme sihirbazı |
 | `bin/proxy-run remove [provider]` | Provider'ı config'den kaldır (onay ister) |
 | `bin/proxy-run models [provider]` | Modelleri listele (proxy çalışmasa da olur) |
-| `bin/proxy-run status` | Çalışan proxy'nin durumu |
-| `bin/proxy-run stop` | Proxy'yi durdur |
+| `bin/proxy-run status` | Çalışan proxy örneklerinin durumu |
+| `bin/proxy-run stop [isim\|all]` | Varsayılan / isimli / tüm örnekleri durdur |
+
+### Aynı Anda Birden Çok Proxy (İsimli Örnekler)
+
+`proxy-run` yeniden çalıştırıldığında hâlâ açık bir proxy varsa öncekinin
+kapatılıp kapatılmayacağı sorulur:
+
+1. **Kapat** — önceki örnek(ler) durur, yeni proxy aynı portta başlar.
+2. **Açık kalsın** — yeni proxy'ye bir isim verilir (ör. `proxy2`) ve boş bir
+   portta açılır (ör. `127.0.0.1:8791`). Önceki proxy çalışmaya devam eder.
+
+İsimli örnekler `run/instances/<isim>/` altında izlenir:
+
+```bash
+bin/proxy-run status            # varsayılan + isimli örnekler birlikte listelenir
+bin/proxy-run stop proxy2       # sadece 'proxy2' örneğini durdur
+bin/proxy-run stop all           # tüm örnekleri durdur
+```
+
+İsimli örneğe `--port` ile açık port da verilebilir:
+`bin/proxy-run <provider> <model> --port 8899` (çalışan proxy varken
+seçimde "açık kalsın" denirse bu port kullanılır).
 
 ### npm Komutları
 
@@ -313,9 +339,11 @@ curl -s -H "X-Api-Key: $PROXY_TOKEN" \
 ### 6. Sunucuyu Durdurma
 
 ```bash
+bin/proxy-run stop            # varsayılan (isimsiz) örneği durdur
+bin/proxy-run stop <isim>     # isimli örneği durdur
+bin/proxy-run stop all        # tüm örnekleri durdur
+# veya tüm süreçleri elle bitirirken:
 pkill -f "node src/server.mjs"
-# veya
-bin/proxy-run stop
 ```
 
 ---
@@ -339,7 +367,7 @@ appProxy/
 ├── config/             # providers.json + models.json
 ├── docs/               # resmî doküman aynası (Anthropic, Google, NVIDIA, OpenRouter, Cline)
 ├── logs/               # proxy logları (git'e gitmez)
-├── run/                # runtime dosyaları (pid, port, host, model, provider) (git'e gitmez)
+├── run/                # runtime dosyaları (pid, port, host, model, provider; isimli örnekler run/instances/ altında) (git'e gitmez)
 ├── scripts/            # fetch-docs.sh, html_to_text.py
 ├── src/
 │   ├── server.mjs      # yönlendirici + kimlik doğrulama + akış

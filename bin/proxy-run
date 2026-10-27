@@ -8,15 +8,25 @@
 #   proxy-run <provider> <model>           # model sabit, istemci interaktif
 #   proxy-run <provider> <model> --client cline   # soru sormadan Cline'ı başlat
 #   proxy-run <provider> <model> --client claude  # soru sormadan Claude Code'u başlat
-#   proxy-run <provider> <model> --client none    # sadece proxy'yi başlat
+#   proxy-run <provider> <model> --client none   # sadece proxy'yi başlat
+#   proxy-run <provider> <model> --client pi     # proxy + Pi CLI'ı (https://pi.dev) başlat
 #   proxy-run <provider> --list            # sadece modelleri listele
 #   proxy-run <provider> --filter kimi     # model listesini filtrele
 #   proxy-run --foreground <provider> <model>
-#   proxy-run status | stop
+#   proxy-run status                          # çalışan proxy örneklerini listele
+#   proxy-run stop [isim|all]                 # varsayılan / isimli / tümünü durdur
 #   proxy-run models [provider]
 #
 # OpenAI-uyumlu endpoint: http://127.0.0.1:8790/<provider>/v1/chat/completions
 # Anthropic endpoint    : http://127.0.0.1:8790/<provider>/v1/messages
+#
+# Pi CLI ile bağlanırken proxy bir ara yüz değildir; proxy arka planda çalışır
+# ve Pi CLI seçtiğiniz modelin kendisine doğrudan bağlanır.
+#
+# Çalışan bir proxy varken proxy-run yeniden çalıştırılırsa önceki proxy'nin
+# kapatılıp kapatılmayacağı sorulur: "açık kalsın" seçilirse yeni proxy'ye bir
+# isim verilir ve boş bir portta açılır (run/instances/<isim>/ ile izlenir;
+# durdurmak için: proxy-run stop <isim> ya da proxy-run stop all).
 set -euo pipefail
 
 ORIG_PWD="$PWD"
@@ -29,7 +39,8 @@ MODEL_FILE="$RUN_DIR/proxy-run.model"
 HOST_FILE="$RUN_DIR/proxy-run.host"
 PORT_FILE="$RUN_DIR/proxy-run.port"
 OUT_FILE="logs/proxy-run.out"
-mkdir -p "$RUN_DIR" logs
+INSTANCES_DIR="$RUN_DIR/instances"
+mkdir -p "$RUN_DIR" "$INSTANCES_DIR" logs
 
 node_cfg() {
   node --input-type=module -e "$1"
@@ -52,78 +63,214 @@ Kullanım:
   proxy-run add                                  yeni provider ekleme sihirbazı
   proxy-run remove [provider]                     provider'ı config'den kaldır (onay ister)
   proxy-run models [provider]                   modelleri listele (proxy başlatmadan)
-  proxy-run status                              çalışan proxy'nin durumu
-  proxy-run stop                                 çalışan proxy'yi durdur
+  proxy-run status                              çalışan proxy örneklerini listele
+  proxy-run stop [isim|all]                      varsayılan / isimli / tüm örnekleri durdur
 
 Provider menüsünde "+ yeni provider ekle" seçeneği de vardır; sihirbaz bitince
 akış yeni provider ile devam eder (model listesi -> istemci seçimi -> başlat).
 
+Çalışan bir proxy varken yeni bir proxy-run başlatıldığında:
+  - "Kapat" seçilirse önceki örnek(ler) durur ve aynı port yeniden kullanılır,
+  - "Açık kalsın" seçilirse yeni proxy'ye bir isim verilir ve boş bir portta
+    açılır (örnekler: proxy-run status / proxy-run stop <isim> / stop all).
+
 Seçenekler:
-  -c, --client <cline|claude|none>  Model seçiminden sonra başlatılacak istemci
-  -f, --foreground                  Ön planda çalıştır (istemci seçimi yapılmaz)
-  -l, --list                        Model listesini yazdır ve çık
-      --filter <metin>              Model listesini büyük/küçük harf duyarsız filtrele
-      --host <host>                 PROXY_HOST değerini geçici olarak değiştir
-      --port <port>                 PROXY_PORT değerini geçici olarak değiştir
-  -h, --help                        Bu yardımı göster
+  -c, --client <cline|claude|pi|none>  Model seçiminden sonra başlatılacak istemci
+  -f, --foreground                     Ön planda çalıştır (istemci seçimi yapılmaz)
+  -l, --list                           Model listesini yazdır ve çık
+      --filter <metin>                 Model listesini büyük/küçük harf duyarsız filtrele
+      --host <host>                    PROXY_HOST değerini geçici olarak değiştir
+      --port <port>                    PROXY_PORT değerini geçici olarak değiştir
+  -h, --help                           Bu yardımı göster
+
+--client pi: seçilen provider/model ile Pi CLI'ı (https://pi.dev) başlatır.
+  Proxy arka planda çalışmaya devam eder; Pi doğrudan sağlayıcının ucuna bağlanır.
 USAGE
 }
 
-stop_proxy() {
-  if [[ ! -f "$PID_FILE" ]]; then
-    echo "Çalışan proxy yok ($PID_FILE bulunamadı)."
+# --- Örnek (instance) yönetimi ----------------------------------------------
+# Varsayılan (isimsiz) örnek run/proxy-run.* düz dosyalarıyla izlenir; "isimli"
+# örnekler run/instances/<isim>/ altında aynı alanları (pid, provider, model,
+# host, port) tutar. Böylece birden çok proxy yan yana çalışabilir.
+
+is_proxy_pid() {
+  [[ -n "${1:-}" ]] || return 1
+  kill -0 "$1" 2>/dev/null || return 1
+  [[ -r "/proc/$1/cmdline" ]] && tr '\0' ' ' < "/proc/$1/cmdline" | grep -q 'src/server.mjs'
+}
+
+kill_pid() {
+  kill "$1" 2>/dev/null || true
+  for _ in {1..30}; do
+    kill -0 "$1" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  kill -9 "$1" 2>/dev/null || true
+}
+
+# Çalışan örnekleri listeler. Her satır: isim \t pid \t host \t port \t provider \t model
+# Ölü pid kayıtları temizlenir. Boş çıktı = çalışan örnek yok.
+list_running_instances() {
+  local name pid host port provider model out=""
+  pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+  if [[ -n "$pid" ]]; then
+    if ! kill -0 "$pid" 2>/dev/null; then
+      rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"
+    elif ! is_proxy_pid "$pid"; then
+      echo "UYARI: $PID_FILE'deki pid $pid appProxy (src/server.mjs) değil; yok sayıldı." >&2
+    else
+      host="$(cat "$HOST_FILE" 2>/dev/null || echo 127.0.0.1)"
+      port="$(cat "$PORT_FILE" 2>/dev/null || echo '?')"
+      provider="$(cat "$PROVIDER_FILE" 2>/dev/null || echo '?')"
+      model="$(cat "$MODEL_FILE" 2>/dev/null || echo '?')"
+      out+="default"$'\t'"$pid"$'\t'"$host"$'\t'"$port"$'\t'"$provider"$'\t'"$model"$'\n'
+    fi
+  fi
+  local dir
+  for dir in "$INSTANCES_DIR"/*/; do
+    [[ -d "$dir" ]] || continue
+    name="$(basename "$dir")"
+    pid="$(cat "$dir/pid" 2>/dev/null || true)"
+    if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+      rm -rf "$dir"
+      continue
+    fi
+    if ! is_proxy_pid "$pid"; then
+      echo "UYARI: '$name' örnek pid'si ($pid) appProxy (src/server.mjs) değil; yok sayıldı." >&2
+      continue
+    fi
+    host="$(cat "$dir/host" 2>/dev/null || echo 127.0.0.1)"
+    port="$(cat "$dir/port" 2>/dev/null || echo '?')"
+    provider="$(cat "$dir/provider" 2>/dev/null || echo '?')"
+    model="$(cat "$dir/model" 2>/dev/null || echo '?')"
+    out+="$name"$'\t'"$pid"$'\t'"$host"$'\t'"$port"$'\t'"$provider"$'\t'"$model"$'\n'
+  done
+  printf '%s' "$out"
+}
+
+stop_instance() {  # $1: örnek ismi (boşsa varsayılan isimsiz örnek)
+  local name="${1:-}" pid_file pid_dir pid
+  if [[ -n "$name" ]]; then
+    pid_file="$INSTANCES_DIR/$name/pid"
+    pid_dir="$INSTANCES_DIR/$name"
+  else
+    pid_file="$PID_FILE"
+    pid_dir=""
+  fi
+  if [[ ! -f "$pid_file" ]]; then
+    if [[ -n "$name" ]]; then
+      echo "İsimli proxy '$name' çalışmıyor."
+    else
+      echo "Çalışan proxy yok ($PID_FILE bulunamadı)."
+    fi
     return 0
   fi
-  local pid
-  pid="$(cat "$PID_FILE")"
-  if ! kill -0 "$pid" 2>/dev/null; then
-    echo "PID $pid çalışmıyor; dosyalar temizlendi."
-    rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"
+  pid="$(cat "$pid_file" 2>/dev/null || true)"
+  if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+    echo "PID ${pid:-?} çalışmıyor; dosyalar temizlendi."
+    if [[ -n "$pid_dir" ]]; then rm -rf "$pid_dir"; else rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"; fi
     return 0
   fi
-  if [[ -r "/proc/$pid/cmdline" ]] && ! tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q 'src/server.mjs'; then
+  if ! is_proxy_pid "$pid"; then
     echo "PID $pid appProxy (src/server.mjs) değil; dokunulmadı." >&2
     return 1
   fi
-  kill "$pid" 2>/dev/null || true
-  for _ in {1..30}; do
-    kill -0 "$pid" 2>/dev/null || break
-    sleep 0.1
+  kill_pid "$pid"
+  if [[ -n "$pid_dir" ]]; then rm -rf "$pid_dir"; else rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"; fi
+  echo "Proxy durduruldu (pid $pid${name:+, isim: $name})."
+  return 0
+}
+
+stop_all_instances() {
+  local stopped=0 name pid rest
+  while IFS=$'\t' read -r name pid rest; do
+    [[ -n "$name" ]] || continue
+    if [[ "$name" == "default" ]]; then
+      stop_instance ""
+    else
+      stop_instance "$name"
+    fi
+    stopped=1
+  done < <(list_running_instances)
+  if [[ "$stopped" == "0" ]]; then
+    echo "Çalışan proxy yok."
+  fi
+  return 0
+}
+
+port_busy() {  # $1: port — o portta bir TCP dinleyici var mı?
+  (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+}
+
+find_free_port() {  # $1: başlangıç port; ilk boş portu yazdırır
+  local p=$(( $1 + 1 ))
+  while (( p <= $1 + 200 )); do
+    if ! port_busy "$p"; then
+      echo "$p"
+      return 0
+    fi
+    p=$((p + 1))
   done
-  kill -9 "$pid" 2>/dev/null || true
-  rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"
-  echo "Proxy durduruldu (pid $pid)."
+  return 1
+}
+
+valid_instance_name() {
+  [[ "${1:-}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$ ]] || return 1
+  [[ "$1" == "default" ]] && return 1
+  [[ "$1" == "all" ]] && return 1
+  return 0
+}
+
+suggest_instance_name() {
+  local n=2
+  while [[ -d "$INSTANCES_DIR/proxy$n" ]]; do
+    n=$((n + 1))
+  done
+  echo "proxy$n"
 }
 
 status_proxy() {
-  if [[ ! -f "$PID_FILE" ]]; then
+  local running
+  running="$(list_running_instances)"
+  if [[ -z "$running" ]]; then
     echo "Proxy çalışmıyor."
     return 1
   fi
-  local pid host port provider model
-  pid="$(cat "$PID_FILE")"
-  host="$(cat "$HOST_FILE" 2>/dev/null || echo 127.0.0.1)"
-  port="$(cat "$PORT_FILE" 2>/dev/null || echo 8790)"
-  provider="$(cat "$PROVIDER_FILE" 2>/dev/null || echo '?')"
-  model="$(cat "$MODEL_FILE" 2>/dev/null || echo '?')"
-  if ! kill -0 "$pid" 2>/dev/null; then
-    echo "PID dosyası var ama süreç yok: $pid"
-    return 1
-  fi
-  [[ "$host" == "0.0.0.0" || "$host" == "::" ]] && host="127.0.0.1"
-  echo "Proxy çalışıyor (pid $pid)."
-  echo "  Provider : $provider"
-  echo "  Model    : $model"
-  echo "  OpenAI   : http://$host:$port/$provider/v1"
-  echo "  Anthropic: http://$host:$port/$provider/v1"
-  echo -n "  Health   : "
-  curl -sf "http://$host:$port/health" || echo "(yanıt yok)"
-  echo
+  local name pid host port provider model label health
+  echo "Çalışan proxy örnekleri:"
+  while IFS=$'\t' read -r name pid host port provider model; do
+    [[ -n "$name" ]] || continue
+    label="$name"
+    [[ "$name" == "default" ]] && label="default (isimsiz)"
+    [[ "$host" == "0.0.0.0" || "$host" == "::" ]] && host="127.0.0.1"
+    health="$(curl -sf --max-time 3 "http://$host:$port/health" 2>/dev/null || echo '(yanıt yok)')"
+    echo "  [$label] pid $pid"
+    echo "    Provider : $provider"
+    echo "    Model    : $model"
+    echo "    OpenAI   : http://$host:$port/$provider/v1"
+    echo "    Anthropic: http://$host:$port/$provider/v1"
+    echo "    Health   : $health"
+  done <<< "$running"
+  return 0
 }
 
 case "${1:-}" in
   stop)
-    stop_proxy
+    shift
+    case "${1:-}" in
+      ""|default)
+        stop_instance ""
+        ;;
+      all|--all)
+        stop_all_instances
+        ;;
+      -h|--help)
+        echo "Kullanım: bin/proxy-run stop [isim|all]"
+        ;;
+      *)
+        stop_instance "$1"
+        ;;
+    esac
     exit $?
     ;;
   status)
@@ -157,6 +304,7 @@ PROVIDER=""
 MODEL=""
 HOST=""
 PORT=""
+PORT_EXPLICIT=0
 CLIENT=""
 
 while [[ $# -gt 0 ]]; do
@@ -199,10 +347,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --port)
       PORT="${2:-}"
+      PORT_EXPLICIT=1
       shift 2
       ;;
     --port=*)
       PORT="${1#*=}"
+      PORT_EXPLICIT=1
       shift
       ;;
     -h|--help)
@@ -229,9 +379,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "${CLIENT:-}" in
-  ""|cline|claude|none) ;;
+  ""|cline|claude|pi|none) ;;
   *)
-    echo "HATA: --client yalnızca cline, claude veya none olabilir (aldım: $CLIENT)" >&2
+    echo "HATA: --client yalnızca cline, claude, pi veya none olabilir (aldım: $CLIENT)" >&2
     exit 1
     ;;
 esac
@@ -384,9 +534,90 @@ if [[ "$KEY_SET" != "yes" ]]; then
   echo "UYARI: $PROVIDER için API anahtarı boş görünüyor (.env). Upstream 401 dönebilir." >&2
 fi
 
+# --- Çalışan proxy kararı ---------------------------------------------------
+# Daha önce başlatılmış ve kapatılmamış proxy(ler) varsa kullanıcıya sorulur:
+# öncekiler kapatılıp aynı portta mı devam edilsin, yoksa öncekiler çalışmaya
+# devam ederken yeni proxy'ye bir isim verilip boş bir portta mı açılsın?
+INSTANCE_NAME=""          # boş = varsayılan (isimsiz) örnek
+EFFECTIVE_PORT="$CFG_PORT"
+
+if [[ "$FOREGROUND" != "1" ]]; then
+  RUNNING_INSTANCES="$(list_running_instances)"
+  if [[ -n "$RUNNING_INSTANCES" ]]; then
+    echo
+    echo "Çalışan proxy örnekleri:"
+    while IFS=$'\t' read -r R_NAME R_PID R_HOST R_PORT R_PROVIDER R_MODEL; do
+      [[ -n "$R_NAME" ]] || continue
+      R_LABEL="$R_NAME"
+      [[ "$R_NAME" == "default" ]] && R_LABEL="(isimsiz varsayılan)"
+      [[ "$R_HOST" == "0.0.0.0" || "$R_HOST" == "::" ]] && R_HOST="127.0.0.1"
+      printf '  %-22s pid=%-7s http://%s:%-6s %-14s %s\n' \
+        "$R_LABEL" "$R_PID" "$R_HOST" "$R_PORT" "$R_PROVIDER" "$R_MODEL"
+    done <<< "$RUNNING_INSTANCES"
+
+    if [[ ! -t 0 ]]; then
+      echo "HATA: çalışan proxy var; terminalden seçim yapılamıyor (stdin terminal değil)." >&2
+      echo "  Öncekileri kapatmak için: bin/proxy-run stop all" >&2
+      echo "  Yan yana çalıştırmak için: bin/proxy-run <provider> <model> --port <port> --client none" >&2
+      exit 1
+    fi
+
+    echo
+    echo "Yeni bir proxy başlatılacak. Önceki proxy ne yapılsın?"
+    select DECISION_WORD in \
+      "Kapat: öncekileri durdur, aynı portta başlat" \
+      "Açık kalsın: yeni proxy'ye isim ver, başka portta aç" \
+      "İptal"; do
+      [[ -n "$DECISION_WORD" ]] && break
+    done
+    if [[ -z "${DECISION_WORD:-}" ]]; then
+      echo "Seçim yapılmadı; iptal edildi." >&2
+      exit 1
+    fi
+    case "$DECISION_WORD" in
+      Kapat*)
+        echo "Önceki proxy örnekleri durduruluyor..."
+        stop_all_instances
+        ;;
+      Açık*)
+        NAME_SUGGEST="$(suggest_instance_name)"
+        read -r -p "Yeni proxy'nin ismi [$NAME_SUGGEST]: " NAME_INPUT || NAME_INPUT=""
+        NAME_INPUT="${NAME_INPUT//[[:space:]]/}"
+        [[ -z "$NAME_INPUT" ]] && NAME_INPUT="$NAME_SUGGEST"
+        if ! valid_instance_name "$NAME_INPUT"; then
+          echo "HATA: geçersiz isim: '$NAME_INPUT' — harf/rakam ile başlamalı; yalnızca harf, rakam, '.', '_', '-' içerebilir; 'default' ve 'all' ayrılmıştır." >&2
+          exit 1
+        fi
+        if [[ -d "$INSTANCES_DIR/$NAME_INPUT" ]]; then
+          echo "HATA: '$NAME_INPUT' adlı örnek zaten çalışıyor." >&2
+          exit 1
+        fi
+        INSTANCE_NAME="$NAME_INPUT"
+        if [[ "$PORT_EXPLICIT" == "1" ]]; then
+          EFFECTIVE_PORT="$CFG_PORT"
+          if port_busy "$EFFECTIVE_PORT"; then
+            echo "HATA: --port $EFFECTIVE_PORT kullanımda; boş bir port belirtin." >&2
+            exit 1
+          fi
+        else
+          if ! EFFECTIVE_PORT="$(find_free_port "$CFG_PORT")"; then
+            echo "HATA: $CFG_PORT sonrasında boş port bulunamadı." >&2
+            exit 1
+          fi
+        fi
+        echo "Yeni proxy '$INSTANCE_NAME' -> port $EFFECTIVE_PORT (öncekiler çalışmaya devam ediyor)."
+        ;;
+      *)
+        echo "İptal edildi." >&2
+        exit 1
+        ;;
+    esac
+  fi
+fi
+
 CLIENT_HOST="$CFG_HOST"
 [[ "$CLIENT_HOST" == "0.0.0.0" || "$CLIENT_HOST" == "::" ]] && CLIENT_HOST="127.0.0.1"
-SERVER_URL="http://${CLIENT_HOST}:${CFG_PORT}"
+SERVER_URL="http://${CLIENT_HOST}:${EFFECTIVE_PORT}"
 OPENAI_BASE="${SERVER_URL}/${PROVIDER}/v1"
 ANTHROPIC_BASE="${OPENAI_BASE}"
 
@@ -394,13 +625,14 @@ ANTHROPIC_BASE="${OPENAI_BASE}"
 if [[ "$FOREGROUND" != "1" && -z "${CLIENT:-}" ]]; then
   echo
   echo "İstemci seçimi:"
-  select CLIENT_WORD in cline claude "sadece proxy"; do
+  select CLIENT_WORD in cline claude "pi cli (https://pi.dev)" "sadece proxy"; do
     [[ -n "$CLIENT_WORD" ]] && break
   done
   case "${CLIENT_WORD:-}" in
-    cline) CLIENT="cline" ;;
-    claude) CLIENT="claude" ;;
-    *) CLIENT="none" ;;
+    cline)   CLIENT="cline" ;;
+    claude)  CLIENT="claude" ;;
+    pi*)     CLIENT="pi" ;;
+    *)       CLIENT="none" ;;
   esac
   if [[ -z "${CLIENT_WORD:-}" ]]; then
     CLIENT="none"
@@ -427,10 +659,37 @@ if [[ "$CLIENT" == "claude" ]] && ! command -v claude >/dev/null 2>&1; then
   CLIENT="none"
 fi
 
+# --- Pi CLI hazırlığı -------------------------------------------------------
+if [[ "$CLIENT" == "pi" ]]; then
+  if ! command -v pi >/dev/null 2>&1; then
+    echo "UYARI: 'pi' (Pi Coding Agent, https://pi.dev) bulunamadı; sadece proxy başlatılacak." >&2
+    CLIENT="none"
+  fi
+  # Pi, kendi API anahtarlarını kendi env değişken adlarıyla okur; appProxy'nin
+  # .env anahtarı ile eşleştir.
+  case "$PROVIDER" in
+    gemini)   PI_KEY_VAR="GOOGLE_API_KEY"   ;;
+    openrouter) PI_KEY_VAR="OPENROUTER_API_KEY" ;;
+    nvidia)   PI_KEY_VAR="NVIDIA_API_KEY"   ;;
+    cohere)   PI_KEY_VAR="CO_API_KEY"       ;;
+    anyrouter) PI_KEY_VAR="ANYROUTER_API_KEY" ;;
+    refuseless|apinex)
+      PI_KEY_VAR="OPENAI_API_KEY"
+      echo "UYARI: Pi 'openai' provider'ını kullanır; .env'de $PI_KEY_VAR ayarlayın." >&2
+      ;;
+    *)        PI_KEY_VAR="" ;;
+  esac
+  if [[ -n "$PI_KEY_VAR" ]] && ! grep -qE "^${PI_KEY_VAR}=" .env && [[ -z "${!PI_KEY_VAR:-}" ]]; then
+    echo "UYARI: Pi için $PI_KEY_VAR ayarlanmadı; upstream 401 dönebilir." >&2
+    echo "  Çözüm: .env'ye '$PI_KEY_VAR=<anahtar>' ekleyin." >&2
+  fi
+fi
+
 print_summary() {
   echo
   echo "=========================================================="
   echo " appProxy hazır"
+  [[ -n "${INSTANCE_NAME:-}" ]] && echo "  Örnek    : $INSTANCE_NAME"
   echo "=========================================================="
   echo "  Provider : $PROVIDER"
   echo "  Model    : $MODEL"
@@ -452,7 +711,11 @@ print_instructions() {
   echo '  export ANTHROPIC_AUTH_TOKEN="$PROXY_TOKEN"'
   echo "  export ANTHROPIC_MODEL=\"$MODEL\""
   echo
-  echo "Durdurmak için : bin/proxy-run stop"
+  if [[ -n "${INSTANCE_NAME:-}" ]]; then
+    echo "Durdurmak için : bin/proxy-run stop $INSTANCE_NAME"
+  else
+    echo "Durdurmak için : bin/proxy-run stop"
+  fi
   echo "Durum          : bin/proxy-run status"
   echo
 }
@@ -463,21 +726,46 @@ if [[ "$FOREGROUND" == "1" ]]; then
   exec node src/server.mjs "$PROVIDER"
 fi
 
-if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-  echo "UYARI: zaten çalışan bir proxy var (pid $(cat "$PID_FILE")). Önce 'bin/proxy-run stop' çalıştır." >&2
-  exit 1
+INST_DIR=""
+if [[ -n "$INSTANCE_NAME" ]]; then
+  INST_DIR="$INSTANCES_DIR/$INSTANCE_NAME"
+  mkdir -p "$INST_DIR"
+  OUT_FILE="logs/proxy-run-$INSTANCE_NAME.out"
 fi
+export PROXY_PORT="$EFFECTIVE_PORT"
 
 : > "$OUT_FILE"
-nohup node src/server.mjs "$PROVIDER" >> "$OUT_FILE" 2>&1 &
+# setsid: proxy, kendisini başlatan terminal kapanınca SIGHUP ile ölmesin
+# diye kendi oturumunda açılır (setsid yoksa düz nohup'a düşülür).
+if command -v setsid >/dev/null 2>&1; then
+  setsid nohup node src/server.mjs "$PROVIDER" >> "$OUT_FILE" 2>&1 < /dev/null &
+else
+  nohup node src/server.mjs "$PROVIDER" >> "$OUT_FILE" 2>&1 < /dev/null &
+fi
 PID=$!
-echo "$PID" > "$PID_FILE"
-echo "$PROVIDER" > "$PROVIDER_FILE"
-echo "$MODEL" > "$MODEL_FILE"
-echo "$CFG_HOST" > "$HOST_FILE"
-echo "$CFG_PORT" > "$PORT_FILE"
+if [[ -n "$INST_DIR" ]]; then
+  echo "$PID" > "$INST_DIR/pid"
+  echo "$PROVIDER" > "$INST_DIR/provider"
+  echo "$MODEL" > "$INST_DIR/model"
+  echo "$CFG_HOST" > "$INST_DIR/host"
+  echo "$EFFECTIVE_PORT" > "$INST_DIR/port"
+else
+  echo "$PID" > "$PID_FILE"
+  echo "$PROVIDER" > "$PROVIDER_FILE"
+  echo "$MODEL" > "$MODEL_FILE"
+  echo "$CFG_HOST" > "$HOST_FILE"
+  echo "$EFFECTIVE_PORT" > "$PORT_FILE"
+fi
 
-echo "Proxy başlatıldı (pid $PID). Sağlık kontrolü..."
+cleanup_failed_start() {
+  if [[ -n "$INST_DIR" ]]; then
+    rm -rf "$INST_DIR"
+  else
+    rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"
+  fi
+}
+
+echo "Proxy başlatıldı (pid $PID${INSTANCE_NAME:+, isim: $INSTANCE_NAME}, port: $EFFECTIVE_PORT). Sağlık kontrolü..."
 for _ in {1..50}; do
   if curl -sf "${SERVER_URL}/health" >/dev/null 2>&1; then
     break
@@ -485,7 +773,7 @@ for _ in {1..50}; do
   if ! kill -0 "$PID" 2>/dev/null; then
     echo "HATA: proxy başlatılamadı. Son loglar:" >&2
     tail -n 30 "$OUT_FILE" >&2 || true
-    rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"
+    cleanup_failed_start
     exit 1
   fi
   sleep 0.2
@@ -504,14 +792,14 @@ case "${CLIENT:-none}" in
     echo "Cline yapılandırılıyor ve başlatılıyor..."
     cline auth openai-compatible -k "$TOKEN_ARG" -m "$MODEL" -b "$OPENAI_BASE"
     echo
-    echo "Cline başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop"
+    echo "Cline başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop${INSTANCE_NAME:+ $INSTANCE_NAME}"
     cd "$ORIG_PWD"
     exec cline -P openai-compatible -m "$MODEL"
     ;;
   claude)
     print_summary
     echo
-    echo "Claude Code başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop"
+    echo "Claude Code başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop${INSTANCE_NAME:+ $INSTANCE_NAME}"
     export DEFAULT_PROVIDER="$PROVIDER"
     export ANTHROPIC_BASE_URL="$ANTHROPIC_BASE"
     export ANTHROPIC_AUTH_TOKEN="$TOKEN_ARG"
@@ -519,6 +807,33 @@ case "${CLIENT:-none}" in
     [[ -n "$FAST_MODEL" ]] && export ANTHROPIC_SMALL_FAST_MODEL="$FAST_MODEL"
     cd "$ORIG_PWD"
     exec claude
+    ;;
+  pi)
+    print_summary
+    echo
+    echo "Pi CLI (https://pi.dev) başlatılıyor (çıkmak için /exit)."
+    # Model çözümü doğrulaması: Pi CLI kurulu ve provider/model geçerli mi?
+    if ! PI_RES=$(node_cfg "
+import { loadConfig } from './src/config.mjs';
+import { checkPiAvailability } from './src/providers/pi.mjs';
+const cfg = loadConfig();
+const result = await checkPiAvailability(cfg, '$PROVIDER', '$MODEL', AbortSignal.timeout(15000));
+console.log(JSON.stringify(result));
+" 2> >(sed 's/^/  /' >&2) || true); then
+      echo "UYARI: Pi CLI model doğrulaması yapılamadı; sadece proxy başlatılacak." >&2
+      CLIENT="none"
+    else
+      PI_AVAIL=$(grep -oP '"available":\s*\K(true|false)' <<< "$PI_RES" || true)
+      PI_REQUIRES=$(grep -oP '"requiresAuth":\s*\K(true|false)' <<< "$PI_RES" || true)
+      if [[ "$PI_AVAIL" != "true" ]]; then
+        echo "UYARI: Pi CLI, seçilen provider/model'i çözemedi; sadece proxy başlatılacak." >&2
+        echo "  Sonuç: $PI_RES" >&2
+        CLIENT="none"
+      elif [[ "$PI_REQUIRES" == "true" ]]; then
+        echo "UYARI: Pi'de API anahtarı ayarlanmamış; Pi ilk istekte 401 dönebilir." >&2
+      fi
+      node src/providers/pi.mjs "$PROVIDER" "$MODEL" "$ORIG_PWD"
+    fi
     ;;
   *)
     print_instructions
