@@ -85,6 +85,9 @@ Seçenekler:
 
 --client pi: seçilen provider/model ile Pi CLI'ı (https://pi.dev) başlatır.
   Proxy arka planda çalışmaya devam eder; Pi doğrudan sağlayıcının ucuna bağlanır.
+  Pi'nin yerleşik desteklemediği sağlayıcılar (cohere, refuseless, apinex,
+  ...) için ~/.pi/agent/models.json'a otomatik "managedBy: appProxy" işaretli
+  özel provider tanımı yazılır; appProxy .env'sindeki anahtar Pi'ye aktarılır.
 USAGE
 }
 
@@ -660,28 +663,16 @@ if [[ "$CLIENT" == "claude" ]] && ! command -v claude >/dev/null 2>&1; then
 fi
 
 # --- Pi CLI hazırlığı -------------------------------------------------------
+# Pi anahtarı süreç ortamından okur; appProxy .env'sindeki anahtar
+# src/providers/pi.mjs tarafından Pi'nin beklediği adla alt sürece aktarılır.
+# Burada yalnızca kaba bir eksik-anahtar uyarısı yapılır.
 if [[ "$CLIENT" == "pi" ]]; then
   if ! command -v pi >/dev/null 2>&1; then
     echo "UYARI: 'pi' (Pi Coding Agent, https://pi.dev) bulunamadı; sadece proxy başlatılacak." >&2
     CLIENT="none"
-  fi
-  # Pi, kendi API anahtarlarını kendi env değişken adlarıyla okur; appProxy'nin
-  # .env anahtarı ile eşleştir.
-  case "$PROVIDER" in
-    gemini)   PI_KEY_VAR="GOOGLE_API_KEY"   ;;
-    openrouter) PI_KEY_VAR="OPENROUTER_API_KEY" ;;
-    nvidia)   PI_KEY_VAR="NVIDIA_API_KEY"   ;;
-    cohere)   PI_KEY_VAR="CO_API_KEY"       ;;
-    anyrouter) PI_KEY_VAR="ANYROUTER_API_KEY" ;;
-    refuseless|apinex)
-      PI_KEY_VAR="OPENAI_API_KEY"
-      echo "UYARI: Pi 'openai' provider'ını kullanır; .env'de $PI_KEY_VAR ayarlayın." >&2
-      ;;
-    *)        PI_KEY_VAR="" ;;
-  esac
-  if [[ -n "$PI_KEY_VAR" ]] && ! grep -qE "^${PI_KEY_VAR}=" .env && [[ -z "${!PI_KEY_VAR:-}" ]]; then
-    echo "UYARI: Pi için $PI_KEY_VAR ayarlanmadı; upstream 401 dönebilir." >&2
-    echo "  Çözüm: .env'ye '$PI_KEY_VAR=<anahtar>' ekleyin." >&2
+  elif [[ "$KEY_SET" != "yes" ]]; then
+    echo "UYARI: $PROVIDER için ${API_KEY_ENV:-API anahtarı} boş; Pi ilk istekte 401 dönebilir." >&2
+    echo "  Çözüm: .env'ye '${API_KEY_ENV}=<anahtar>' ekleyin." >&2
   fi
 fi
 
@@ -812,27 +803,11 @@ case "${CLIENT:-none}" in
     print_summary
     echo
     echo "Pi CLI (https://pi.dev) başlatılıyor (çıkmak için /exit)."
-    # Model çözümü doğrulaması: Pi CLI kurulu ve provider/model geçerli mi?
-    if ! PI_RES=$(node_cfg "
-import { loadConfig } from './src/config.mjs';
-import { checkPiAvailability } from './src/providers/pi.mjs';
-const cfg = loadConfig();
-const result = await checkPiAvailability(cfg, '$PROVIDER', '$MODEL', AbortSignal.timeout(15000));
-console.log(JSON.stringify(result));
-" 2> >(sed 's/^/  /' >&2) || true); then
-      echo "UYARI: Pi CLI model doğrulaması yapılamadı; sadece proxy başlatılacak." >&2
-      CLIENT="none"
-    else
-      PI_AVAIL=$(grep -oP '"available":\s*\K(true|false)' <<< "$PI_RES" || true)
-      PI_REQUIRES=$(grep -oP '"requiresAuth":\s*\K(true|false)' <<< "$PI_RES" || true)
-      if [[ "$PI_AVAIL" != "true" ]]; then
-        echo "UYARI: Pi CLI, seçilen provider/model'i çözemedi; sadece proxy başlatılacak." >&2
-        echo "  Sonuç: $PI_RES" >&2
-        CLIENT="none"
-      elif [[ "$PI_REQUIRES" == "true" ]]; then
-        echo "UYARI: Pi'de API anahtarı ayarlanmamış; Pi ilk istekte 401 dönebilir." >&2
-      fi
-      node src/providers/pi.mjs "$PROVIDER" "$MODEL" "$ORIG_PWD"
+    # Kurulum + doğrulama + başlatma tek noktadan: src/providers/pi.mjs.
+    # Pi'nin yerleşik desteklemediği sağlayıcılar için ~/.pi/agent/models.json'a
+    # otomatik özel provider tanımı yazılır; anahtar .env'den Pi'ye aktarılır.
+    if ! node src/providers/pi.mjs "$PROVIDER" "$MODEL" "$ORIG_PWD"; then
+      echo "UYARI: Pi CLI başlatılamadı; proxy arkada çalışıyor. Durum: bin/proxy-run status" >&2
     fi
     ;;
   *)

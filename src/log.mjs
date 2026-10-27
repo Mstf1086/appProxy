@@ -24,7 +24,7 @@ export function redactHeaders(headers = {}) {
   return out;
 }
 
-export function createLogger({ dir, root, bodies = false }) {
+export function createLogger({ dir, root, bodies = false, echo = true }) {
   const logDir = path.isAbsolute(dir) ? dir : path.join(root, dir);
   fs.mkdirSync(logDir, { recursive: true });
 
@@ -45,8 +45,8 @@ export function createLogger({ dir, root, bodies = false }) {
   function write(level, event, fields = {}) {
     const record = { ts: new Date().toISOString(), level, event, ...fields };
     const line = JSON.stringify(record);
-    // stderr keeps stdout free for CLI output.
-    process.stderr.write(`${line}\n`);
+    // stderr keeps stdout free for CLI output (echo=false: only the file).
+    if (echo) process.stderr.write(`${line}\n`);
     fileStream().write(`${line}\n`);
   }
 

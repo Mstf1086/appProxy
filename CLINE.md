@@ -28,6 +28,10 @@ Akış sırayla şöyle işler:
    - `pi cli` → proxy arka planda başlar; Pi CLI (https://pi.dev) seçilen
      provider/model ile başlatılır ve doğrudan sağlayıcının ucuna bağlanır
      (`pi --provider <p> --model <m>`). Proxy bir ara yüz değildir.
+     Pi'nin yerleşik desteklemediği sağlayıcılar (cohere, refuseless, ...)
+     için `~/.pi/agent/models.json`'a otomatik `"managedBy": "appProxy"`
+     işaretli provider tanımı yazılır; appProxy `.env`'indeki anahtar Pi'ye
+     aktarılır. Kendi models.json tanımınız varsa üzerine yazılmaz.
    - `sadece proxy` → yalnızca proxy başlar; el ile bağlanmak için ekrana hazır komutlar yazılır.
 
 Çalışan bir proxy varken `proxy-run` yeniden çalıştırılırsa önceki proxy'nin kapatılıp

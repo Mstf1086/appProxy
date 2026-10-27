@@ -126,6 +126,23 @@ sırasıyla seçilir. İstemci adımında `pi cli` seçilirse Pi Coding Agent
 (https://pi.dev) seçilen provider/model ile başlatılır; Pi doğrudan
 sağlayıcının ucuna bağlanır, proxy arka planda çalışmaya devam eder.
 
+#### Pi CLI entegrasyonu nasıl çalışır?
+
+- **Yerleşik Pi sağlayıcıları**: `gemini → google`, `openrouter → openrouter`,
+  `nvidia → nvidia` (Pi kendi kataloğu ile çözer; bilinmeyen model ID'leri
+  "custom model id" olarak geçirilir).
+- **Diğer sağlayıcılar** (`cohere`, `refuseless`, `apinex`, `anyrouter`,
+  sihirbazla eklenenler): Pi'nin `models.json` desteği kullanılır. İlk `--client pi`
+  çalıştırmasında `~/.pi/agent/models.json` içine `"managedBy": "appProxy"`
+  işaretli bir provider tanımı otomatik yazılır (Cohere için resmî OpenAI-uyumlu
+  `https://api.cohere.com/compatibility/v1` ucu kullanılır). Kendi
+  tanımınızı yazdıysanız (`managedBy` işareti yoksa) appProxy ona dokunmaz.
+- appProxy `.env`'indeki sağlayıcı anahtarı, Pi'nin beklediği ortam değişkeni
+  adıyla Pi alt sürecine aktarılır (ör. `GEMINI_API_KEY → GOOGLE_API_KEY`).
+- Model üst verisi mümkünse sağlayıcıdan alınır (Cohere `context_length`);
+  çıktı limiti güvenli varsayılanla 8192'dir — `models.json`'dan
+  `maxTokens`/`contextWindow` değerlerini kendiniz değiştirebilirsiniz.
+
 veya tek satırda başlatma:
 
 ```bash
