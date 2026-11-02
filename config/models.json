@@ -388,5 +388,27 @@
         "description": "sihirbaz ile eklendi"
       }
     ]
+  },
+  "lfm3": {
+    "passthroughPrefixes": [
+      "LFM3-"
+    ],
+    "rules": [
+      {
+        "match": "*haiku*",
+        "model": "LFM3-1.7B-Q8_0"
+      },
+      {
+        "match": "*",
+        "model": "LFM3-1.7B-Q8_0"
+      }
+    ],
+    "presets": [
+      {
+        "id": "LFM3-1.7B-Q8_0",
+        "label": "LFM3 1.7B Q8_0",
+        "description": "Yerel llama-server (32K baglam, 4K cikti)"
+      }
+    ]
   }
 }

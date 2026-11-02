@@ -8,6 +8,21 @@ import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+/**
+ * Strip a trailing `# comment` from an unquoted dotenv value.
+ * `KEY=value  # note` → `value`; a `#` without preceding whitespace (`a#b`) or
+ * inside quotes is part of the value. `.env.example` documents values with
+ * inline comments, so without this a copied `PROXY_TOKEN=...  # local` line
+ * yields a token that never matches and every client gets a silent 401.
+ */
+export function stripInlineComment(value) {
+  const text = String(value ?? '');
+  if (!text) return text;
+  const match = text.match(/(^|\s)#/);
+  if (!match) return text;
+  return text.slice(0, match.index).trimEnd();
+}
+
 /** Parse a dotenv-style file. Comments, blank lines and optional quotes. */
 export function parseEnvFile(text) {
   const out = {};
@@ -23,6 +38,8 @@ export function parseEnvFile(text) {
       (value.startsWith("'") && value.endsWith("'"))
     ) {
       value = value.slice(1, -1);
+    } else {
+      value = stripInlineComment(value);
     }
     out[key] = value;
   }
@@ -73,10 +90,15 @@ export function loadConfig({ root = ROOT } = {}) {
   // (nvidia kaldırılmışsa atlanır; bkz. `bin/proxy-run remove`.)
   const nvidia = providers.nvidia;
   if (nvidia) {
-    const nvidiaMode = readEnv(env, 'NVIDIA_MODE', nvidia.mode);
+    const nvidiaMode = readEnv(env, 'NVIDIA_MODE', nvidia.mode ?? 'hosted');
     nvidia.mode = nvidiaMode;
     if (nvidiaMode === 'nim') {
-      nvidia.selfHosted.baseUrl = readEnv(env, 'NIM_BASE_URL', nvidia.selfHosted.baseUrl);
+      // A self-hosted NIM serves the OpenAI API under /v1. Accept both
+      // "http://host:8000" and "http://host:8000/v1" (the README and .env.example
+      // document the former), and never crash when the block is missing.
+      const selfHosted = (nvidia.selfHosted ??= {});
+      const raw = readEnv(env, 'NIM_BASE_URL', selfHosted.baseUrl ?? 'http://127.0.0.1:8000/v1');
+      selfHosted.baseUrl = /\/v1\/?$/.test(raw) ? raw.replace(/\/+$/, '') : `${raw.replace(/\/+$/, '')}/v1`;
     }
   }
 

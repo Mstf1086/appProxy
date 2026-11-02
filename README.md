@@ -510,14 +510,14 @@ appProxy/
 │   ├── config.mjs      # .env + config yükleme
 │   ├── add-provider.mjs / remove-provider.mjs   # sihirbazlar
 │   ├── providers/      # anthropic | cohere | gemini | openai bağdaştırıcıları
-│   ├── translate/      # protokol çevirileri (anthropic ↔ openai ↔ gemini ↔ cohere)
+│   ├── translate/      # protokol çevirileri (anthropic ↔ openai ↔ cohere)
 │   ├── http.mjs, sse.mjs, errors.mjs, log.mjs
 │   └── models.mjs      # model keşfi + eşleme
 └── tests/              # birim testler
 ```
 
 - `src/server.mjs` — yönlendirme: `<provider>/v1/messages` + `<provider>/v1/chat/completions`
-- `src/translate/` — protokol çevirileri (anthropic ↔ openai ↔ gemini ↔ cohere)
+- `src/translate/` — protokol çevirileri (anthropic ↔ openai ↔ cohere); Gemini, OpenAI uyumlu ucundan geçer
 - `src/providers/` — sağlayıcıya özgü upstream bağdaştırıcıları
 - `src/add-provider.mjs` / `src/remove-provider.mjs` — etkileşimli sihirbazlar
 - `config/providers.json` + `config/models.json` — sağlayıcı ve model eşleme yapılandırması

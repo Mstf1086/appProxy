@@ -72,7 +72,12 @@
       "mapReasoningToThinking": true,
       "defaultModel": "nvidia/llama-3.1-nemotron-70b-instruct",
       "fastModel": "z-ai/glm-5.3-flash",
-      "docNote": "nvidia: sihirbaz ile eklendi (bin/proxy-run)"
+      "docNote": "nvidia: sihirbaz ile eklendi (bin/proxy-run)",
+      "selfHosted": {
+        "baseUrl": "http://127.0.0.1:8000/v1",
+        "apiKeyEnv": "NIM_API_KEY",
+        "apiKeyFallback": "not-used"
+      }
     },
     "beatapi": {
       "kind": "openai",
@@ -93,6 +98,20 @@
       "mapReasoningToThinking": true,
       "defaultModel": "z-ai/glm-5v-turbo",
       "docNote": "zenmux: sihirbaz ile eklendi (bin/proxy-run)"
+    },
+    "lfm3": {
+      "kind": "openai",
+      "baseUrl": "http://127.0.0.1:8080/v1",
+      "apiKeyEnv": "LFM3_API_KEY",
+      "apiKeyFallback": "not-used",
+      "maxTokensField": "max_tokens",
+      "streamIncludeUsage": true,
+      "mapReasoningToThinking": false,
+      "defaultModel": "LFM3-1.7B-Q8_0",
+      "contextWindow": 32768,
+      "maxOutputTokens": 4096,
+      "docNote": "lfm3: yerel llama-server (OpenAI uyumlu). Pi guvenlik payi 4096 oldugu icin 32K baglam.",
+      "maxTokens": 4096
     }
   }
 }
