@@ -91,10 +91,14 @@ test('boşta kalan akışta ping gönderilir, bitince durur', async () => {
   const res = fakeRes();
   const stream = new AnthropicStream(res);
   stream.writeHead();
-  stream.startHeartbeat(20);
-  await new Promise((resolve) => setTimeout(resolve, 70));
-  const pings = parseEvents(res.body).filter((e) => e.event === 'ping');
-  assert.ok(pings.length >= 2, `beklenen en az 2 ping, gelen ${pings.length}`);
+  stream.startHeartbeat(10);
+  const countPings = () => parseEvents(res.body).filter((e) => e.event === 'ping').length;
+  // Sabit süre beklemek yük altında kararsız (timer geç ateşlenir): 2 ping
+  // görünene kadar bekle, en fazla ~1 s.
+  for (let i = 0; i < 100 && countPings() < 2; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.ok(countPings() >= 2, `beklenen en az 2 ping, gelen ${countPings()}`);
 
   stream.finish({ stopReason: 'end_turn', outputTokens: 1 });
   const afterFinish = res.body.length;
