@@ -23,15 +23,38 @@ istemciye asla gönderilmez.
 
 ## 📋 İçindekiler
 
-1. [Kurulum](#-kurulum)
-2. [İlk Kurulum (Sıfırdan Başlama)](#-ilk-kurulum-sıfırdan-başlama)
-3. [Kullanım](#-kullanım)
-4. [Provider Yönetimi](#-provider-yönetimi)
-5. [Manuel Kurulum (Detaylı)](#-manuel-kurulum-detaylı-adımlarla)
-6. [Testler](#-testler)
-7. [Mimari](#-mimari)
-8. [Güvenlik](#-güvenlik)
-9. [Sorun Giderme](#-sorun-giderme)
+1. [Hızlı Kurulum (tek komut)](#-hızlı-kurulum-tek-komut)
+2. [Kurulum](#-kurulum)
+3. [İlk Kurulum (Sıfırdan Başlama)](#-ilk-kurulum-sıfırdan-başlama)
+4. [Kullanım](#-kullanım)
+5. [Log Dosyası](#-log-dosyası)
+6. [Model Fallback](#-model-fallback)
+7. [Provider Yönetimi](#-provider-yönetimi)
+8. [Manuel Kurulum (Detaylı)](#-manuel-kurulum-detaylı-adımlarla)
+9. [Testler](#-testler)
+10. [Mimari](#-mimari)
+11. [Güvenlik](#-güvenlik)
+12. [Sorun Giderme](#-sorun-giderme)
+
+---
+
+## ⚡ Hızlı Kurulum (tek komut)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Mstf1086/appProxy/master/install.sh | bash
+source ~/.bashrc
+proxy-run
+```
+
+`install.sh` şunları yapar (tekrar çalıştırmak güvenlidir, güncelleme olarak da kullanılır):
+
+1. Repoyu `~/appProxy` içine klonlar; varsa `git pull --ff-only` ile günceller.
+2. `bin/` altındaki dosyalara çalıştırma izni verir.
+3. `.env` yoksa `.env.example`'dan oluşturur (`chmod 600`). API anahtarlarını bu dosyaya yazın.
+4. `~/.bashrc`'ye `proxy-run` alias'ını ekler (`# >>> appProxy >>>` bloğu; çoğalmaz).
+
+Ortam değişkenleri: `APPPROXY_DIR` (varsayılan `~/appProxy`), `APPPROXY_BRANCH` (varsayılan `master`).
+Gereksinim: `git` ve Node.js >= 20.
 
 ---
 
@@ -186,18 +209,51 @@ Proxy çalışırken durdurmak: `bin/proxy-run stop` (isimli örnek için
 ### Adım 6 — Test Edin
 
 ```bash
-npm test               # 40 test: çevirmeler, model keşfi, imza, sihirbazlar
+npm test               # çevirmeler, model keşfi, imza, fallback, log, sihirbazlar
 npm run doctor         # anahtar/endpoint özeti (anahtarlar maskelenir)
 ```
 
 ---
 
-## Log dosyası
+## 📝 Log Dosyası
 
-`proxy-run` çalıştığı sürece her işlem `logs/proxy-run.log` dosyasına satır satır yazılır
-(isimli örneklerde `logs/proxy-run-<isim>.log`): gelen HTTP istekleri ve yanıt kodları, seçilen model,
-upstream isteği/yanıtı, hatalar (upstream gövdesiyle), model fallback ve istemci başlangıç/çıkışı.
-Prompt içerikleri ve anahtarlar yazılmaz. Canlı izlemek için: `tail -f ~/appProxy/logs/proxy-run.log`
+`proxy-run` çalıştığı sürece her işlem **`logs/proxy-run.log`** dosyasına satır satır yazılır
+(isimli örneklerde `logs/proxy-run-<isim>.log`). Sunucu çıktısı ayrıca `logs/proxy-run.out`,
+ham JSON günlüğü `logs/proxy-YYYY-MM-DD.jsonl` dosyasındadır.
+
+Canlı izleme:
+
+```bash
+tail -f ~/appProxy/logs/proxy-run.log
+```
+
+Örnek satırlar:
+
+```text
+2026-11-02T07:00:17.168Z INFO  http.request method=POST path=/nvidia/v1/messages length=92
+2026-11-02T07:00:17.169Z INFO  request.start provider=nvidia model=z-ai/glm-5.3-flash messages=1
+2026-11-02T07:00:17.170Z INFO  upstream.request url=https://integrate.api.nvidia.com/v1/chat/completions
+2026-11-02T07:00:17.191Z ERROR request.failed status=404 upstreamBody="..."
+2026-11-02T07:00:17.193Z INFO  http.response path=/nvidia/v1/messages status=502 ms=25
+```
+
+Kaydedilenler: gelen HTTP istekleri ve yanıt kodları/süreleri, istenen ve kullanılan model,
+mesaj/tool sayısı, upstream isteği ve yanıt kodu, hatalar (upstream gövdesinin ilk 800 karakteriyle),
+model fallback olayları, bilinmeyen route'lar ve `proxy-run` adımları (provider/model/istemci seçimi,
+istemci başlangıcı ve çıkış kodu). **Prompt içerikleri ve API anahtarları yazılmaz**
+(`PROXY_LOG_BODIES=1` olmadıkça gövde loglanmaz). Log dosyasının yolunu `PROXY_LOG_FILE` ile değiştirebilirsiniz.
+
+---
+
+## 🔁 Model Fallback
+
+Claude Code arka plan işleri için `fastModel` (`ANTHROPIC_SMALL_FAST_MODEL`) ister; upstream bu modeli
+sunmuyorsa 404/410 (veya "model" geçen 400/403/422) döner ve Claude Code "There's an issue with the
+selected model" hatasını gösterir. Proxy bu durumda isteği **bir kez** sağlayıcının `defaultModel`'iyle
+yeniden dener ve `model.fallback` olayını loga yazar. Yanıt başlamışsa (streaming) fallback uygulanmaz.
+Kalıcı çözüm için `config/providers.json` içinde `fastModel` değerini erişebildiğiniz bir modele çevirin.
+
+---
 
 ## ✨ İlk Kurulum (Sıfırdan Başlama)
 
@@ -408,7 +464,7 @@ npm test
 ```
 
 `node --test` ile çalışır — `tests/*.test.mjs`: URL eşleme, model keşfi, imza
-gidiş-dönüşü, model eşleme, sihirbazlar (40 test).
+gidiş-dönüşü, model eşleme, model fallback, log yazımı, sihirbazlar.
 
 ---
 
@@ -464,6 +520,9 @@ appProxy/
 | Port çakışması | 8790 zaten kullanımda | `PROXY_PORT` ile farklı port deneyin |
 | Provider listede görünmüyor | `config/providers.json` güncel değil | `bin/proxy-run add` ile yeniden ekleyin |
 | Model keşfi başarısız | Upstream kapalı / anahtar hatalı | `npm run models <provider>` ile deneyin, `PROXY_LOG_BODIES=1` ile logları artırın |
+| `There's an issue with the selected model` | Upstream seçilen/hızlı modeli sunmuyor | `tail -n 30 logs/proxy-run.log` içindeki `request.failed` satırına (`status`, `upstreamBody`) bakın; `fastModel`'i değiştirin ([Model Fallback](#-model-fallback)) |
+| `route.unknown` / 404 `not found` | İstemci desteklenmeyen bir yola istek attı | Log'daki `path` değerine bakın, `ANTHROPIC_BASE_URL`'in `/<provider>` ile bittiğini doğrulayın |
+| `proxy-run: command not found` | Alias yüklenmedi | `source ~/.bashrc` veya `install.sh`'i yeniden çalıştırın |
 | Anahtar `.git`'e gitmişse | `.env` yanlışlıkla eklenmiş | `git rm --cached .env` + anahtarları rotasyona uğratın |
 
 ---
