@@ -16,6 +16,7 @@ import { AnthropicStream, buildMessage } from '../sse.mjs';
 import { OpenAiStreamAdapter, fromOpenAiResponse } from '../translate/openai-in.mjs';
 import { cohereChatUrl, toCohereRequest } from '../translate/cohere-out.mjs';
 import { cohereEventToOpenAiChunks, cohereToOpenAiResponse } from '../translate/cohere-in.mjs';
+import { estimateTokens } from '../tokens.mjs';
 
 export async function handleCohereProvider(ctx) {
   const { providerCfg, request, meta, res, log, signal, sendJsonResponse } = ctx;
@@ -83,8 +84,10 @@ export async function handleCohereProvider(ctx) {
     requestedModel: meta.requestedModel ?? request.model,
     upstreamModel: request.model,
     mapReasoning: providerCfg.mapReasoningToThinking !== false,
+    estimatedInputTokens: estimateTokens(JSON.stringify(body)),
   });
   stream.writeHead();
+  stream.startHeartbeat(ctx.server.keepAlivePingMs ?? 15000);
   log.info('upstream.stream.open', { provider: providerCfg.name, url, model: request.model });
 
   try {
@@ -101,6 +104,7 @@ export async function handleCohereProvider(ctx) {
       for (const chunk of cohereEventToOpenAiChunks(payload, { model: request.model })) {
         adapter.feed(chunk);
       }
+      await stream.throttle();
     }
     adapter.done();
     meta.usage = adapter.usage;

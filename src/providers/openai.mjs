@@ -16,6 +16,7 @@ import { AnthropicStream, buildMessage } from '../sse.mjs';
 import { OpenAiStreamAdapter, fromOpenAiResponse } from '../translate/openai-in.mjs';
 import { toOpenAiRequest } from '../translate/openai-out.mjs';
 import { applyGeminiSignatures, captureGeminiSignatures, StreamSignatureCapture } from '../gemini-signature.mjs';
+import { estimateTokens } from '../tokens.mjs';
 
 /**
  * Send one converted request to an OpenAI-compatible endpoint and translate the
@@ -94,9 +95,13 @@ export async function runOpenAiChat(ctx, { url, headers, captureSignatures = fal
     requestedModel: meta.requestedModel ?? request.model,
     upstreamModel: request.model,
     mapReasoning: providerCfg.mapReasoningToThinking !== false,
+    // The real prompt_tokens only arrives in the last chunk; estimate now so
+    // message_start does not claim 0 input tokens.
+    estimatedInputTokens: estimateTokens(JSON.stringify(body)),
   });
   const capture = captureSignatures ? new StreamSignatureCapture() : null;
   stream.writeHead();
+  stream.startHeartbeat(ctx.server.keepAlivePingMs ?? 15000);
   log.info('upstream.stream.open', { provider: providerCfg.name, url, model: request.model });
 
   try {
@@ -111,6 +116,8 @@ export async function runOpenAiChat(ctx, { url, headers, captureSignatures = fal
       if (chunk?.error) throw new UpstreamError(chunk.error.message ?? 'upstream error', { status: 502 });
       capture?.handleChunk(chunk);
       adapter.feed(chunk);
+      // Slow client: stop pulling from upstream until the socket drains.
+      await stream.throttle();
     }
     capture?.finish();
     adapter.done();

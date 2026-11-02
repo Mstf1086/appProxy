@@ -72,11 +72,12 @@ export function parseToolArguments(raw) {
  * drives an AnthropicStream (src/sse.mjs).
  */
 export class OpenAiStreamAdapter {
-  constructor(stream, { requestedModel, upstreamModel, mapReasoning = true } = {}) {
+  constructor(stream, { requestedModel, upstreamModel, mapReasoning = true, estimatedInputTokens = 0 } = {}) {
     this.stream = stream;
     this.requestedModel = requestedModel;
     this.upstreamModel = upstreamModel;
     this.mapReasoning = mapReasoning;
+    this.estimatedInputTokens = estimatedInputTokens;
     this.started = false;
     this.textIndex = null;
     this.thinkingIndex = null;
@@ -93,7 +94,10 @@ export class OpenAiStreamAdapter {
     this.stream.messageStart({
       id: chunk?.id,
       model: this.requestedModel ?? chunk?.model ?? this.upstreamModel,
-      inputTokens: chunk?.usage?.prompt_tokens ?? 0,
+      // First chunk carries no usage when stream_options.include_usage is on, so
+      // fall back to the local estimate instead of reporting 0 (Claude Code
+      // sizes its context window from this number).
+      inputTokens: chunk?.usage?.prompt_tokens ?? this.estimatedInputTokens ?? 0,
     });
   }
 
@@ -147,7 +151,7 @@ export class OpenAiStreamAdapter {
   done() {
     if (!this.started) {
       // Upstream produced no chunks at all: still emit a valid empty message.
-      this.stream.messageStart({ model: this.requestedModel ?? this.upstreamModel });
+      this.stream.messageStart({ model: this.requestedModel ?? this.upstreamModel, inputTokens: this.estimatedInputTokens });
     }
     for (const entry of this.toolByOpenAiIndex.values()) this.stream.stopBlock(entry.index);
     if (this.thinkingIndex !== null) this.stream.stopBlock(this.thinkingIndex);
@@ -155,6 +159,7 @@ export class OpenAiStreamAdapter {
     this.stream.finish({
       stopReason: stopReasonFromFinish(this.finishReason ?? (this.toolByOpenAiIndex.size ? 'tool_calls' : 'stop')),
       outputTokens: this.usage.output_tokens,
+      inputTokens: this.usage.input_tokens,
     });
   }
 }

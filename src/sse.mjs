@@ -32,6 +32,45 @@ export class AnthropicStream {
     this.eventCount = 0;
     this.outputTokens = 0;
     this.messageId = null;
+    // Backpressure: res.write() returns false once the socket buffer is full.
+    // Ignoring it lets a slow client turn into unbounded memory growth, so the
+    // upstream read loop awaits throttle() before pulling the next event.
+    this.paused = false;
+    this.waiters = [];
+    this.heartbeat = null;
+    if (typeof res.on === 'function') {
+      res.on('drain', () => this.release());
+      res.on('close', () => this.release());
+    }
+  }
+
+  /** Wake every throttle() waiter (socket drained, or the client went away). */
+  release() {
+    this.paused = false;
+    const waiters = this.waiters;
+    this.waiters = [];
+    for (const resolve of waiters) resolve();
+  }
+
+  /**
+   * Resolves once the client socket can take more data. Bounded wait: a client
+   * that stopped reading must not hang the request forever.
+   */
+  async throttle({ timeoutMs = 30000 } = {}) {
+    if (!this.paused) return;
+    await new Promise((resolve) => {
+      let settled = false;
+      let timer;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      timer = setTimeout(finish, timeoutMs);
+      timer.unref?.();
+      this.waiters.push(finish);
+    });
   }
 
   writeHead() {
@@ -40,9 +79,37 @@ export class AnthropicStream {
     this.headersSent = true;
   }
 
+  /**
+   * Idle keep-alive: reasoning models can think for tens of seconds before the
+   * first token, and clients abort an idle turn. `event: ping` is part of the
+   * Anthropic streaming protocol, so it is safe mid-stream.
+   */
+  startHeartbeat(intervalMs = 15000) {
+    if (this.heartbeat || !(intervalMs > 0)) return;
+    this.heartbeat = setInterval(() => {
+      if (this.state === 'done' || this.state === 'error' || this.res.writableEnded) {
+        this.stopHeartbeat();
+        return;
+      }
+      try {
+        this.ping();
+      } catch {
+        this.stopHeartbeat();
+      }
+    }, intervalMs);
+    this.heartbeat.unref?.();
+  }
+
+  stopHeartbeat() {
+    if (!this.heartbeat) return;
+    clearInterval(this.heartbeat);
+    this.heartbeat = null;
+  }
+
   send(event, data) {
     this.writeHead();
-    this.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    if (this.res.write(frame) === false) this.paused = true;
     this.eventCount += 1;
     if (this.onEvent) this.onEvent(event, data);
   }
@@ -114,10 +181,18 @@ export class AnthropicStream {
     this.send('content_block_stop', { type: 'content_block_stop', index });
   }
 
-  /** Emits the final `message_delta` + `message_stop` pair. Required. */
-  finish({ stopReason = 'end_turn', stopSequence = null, outputTokens = null } = {}) {
+  /**
+   * Emits the final `message_delta` + `message_stop` pair. Required.
+   *
+   * `inputTokens` is optional: upstreams only report `prompt_tokens` in their
+   * last chunk, so the exact count can only be corrected here. Clients that
+   * track context from the final usage (rather than from `message_start`) get
+   * the real number instead of the estimate.
+   */
+  finish({ stopReason = 'end_turn', stopSequence = null, outputTokens = null, inputTokens = null } = {}) {
     for (const index of [...this.openBlocks]) this.stopBlock(index);
     const usage = { output_tokens: outputTokens ?? this.outputTokens };
+    if (typeof inputTokens === 'number') usage.input_tokens = inputTokens;
     this.send('message_delta', {
       type: 'message_delta',
       delta: { stop_reason: stopReason, stop_sequence: stopSequence },
@@ -125,6 +200,7 @@ export class AnthropicStream {
     });
     this.send('message_stop', { type: 'message_stop' });
     this.state = 'done';
+    this.stopHeartbeat();
   }
 
   /** Mid-stream error surface (docs/anthropic/api/streaming.md → Error events). */
@@ -134,11 +210,13 @@ export class AnthropicStream {
   }
 
   end() {
+    this.stopHeartbeat();
     if (this.state !== 'done' && this.state !== 'error') {
       // Never leave the client hanging: the client treats a truncated body as a
       // dropped connection. Clip open blocks and finish with what we have.
       this.finish({ stopReason: 'end_turn' });
     }
+    this.release();
     this.res.end();
   }
 }
