@@ -32,12 +32,20 @@ function parseRoute(rawUrl) {
   if ((m = pathname.match(/^\/([a-z0-9_-]+)\/v1\/messages$/))) {
     return { endpoint: 'messages', provider: m[1], protocol: 'anthropic' };
   }
+  if ((m = pathname.match(/^\/([a-z0-9_-]+)\/v1\/messages\/count_tokens$/))) {
+    return { endpoint: 'count_tokens', provider: m[1], protocol: 'anthropic' };
+  }
+  if ((m = pathname.match(/^\/([a-z0-9_-]+)\/v1\/models\/.+$/))) {
+    return { endpoint: 'model', provider: m[1], protocol: 'anthropic', modelId: decodeURIComponent(pathname.split('/v1/models/')[1]) };
+  }
   if ((m = pathname.match(/^\/([a-z0-9_-]+)\/v1\/chat\/completions$/))) {
     return { endpoint: 'chat', provider: m[1], protocol: 'openai' };
   }
   if ((m = pathname.match(/^\/([a-z0-9_-]+)\/v1\/models$/))) {
     return { endpoint: 'models', provider: m[1], protocol: 'openai' };
   }
+  if (pathname === '/v1/messages/count_tokens') return { endpoint: 'count_tokens', provider: defaultProvider, protocol: 'anthropic' };
+  if (pathname.startsWith('/v1/models/')) return { endpoint: 'model', provider: defaultProvider, protocol: 'anthropic', modelId: decodeURIComponent(pathname.slice('/v1/models/'.length)) };
   if (pathname === '/v1/messages') return { endpoint: 'messages', provider: defaultProvider, protocol: 'anthropic' };
   if (pathname === '/v1/chat/completions') return { endpoint: 'chat', provider: defaultProvider, protocol: 'openai' };
   if (pathname === '/v1/models') return { endpoint: 'models', provider: defaultProvider, protocol: 'openai' };
@@ -230,6 +238,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   const helpers = responseHelpers(res);
+  if (route.endpoint === 'model') {
+    // Claude Code may probe GET /v1/models/<id>; answer instead of a (misleading) 404.
+    helpers.sendJsonResponse(200, { type: 'model', id: route.modelId, display_name: route.modelId, created_at: '2026-01-01T00:00:00Z' });
+    return;
+  }
   const retryOpts = {
     log,
     provider: route.provider,
@@ -286,6 +299,16 @@ const server = http.createServer(async (req, res) => {
 
   const apiKey = cfg.apiKeyOf(providerCfg);
   const modelRules = cfg.modelRules(route.provider);
+  const fallbackPresets = cfg.models?.[route.provider]?.presets ?? [];
+
+  if (route.endpoint === 'count_tokens') {
+    // Optional endpoint: a rough estimate (chars/4) keeps Claude Code from hitting a 404.
+    const chars = JSON.stringify({ system: body.system, messages: body.messages, tools: body.tools }).length;
+    const inputTokens = Math.max(1, Math.ceil(chars / 4));
+    log.info('count_tokens.estimate', { provider: route.provider, input_tokens: inputTokens });
+    helpers.sendJsonResponse(200, { input_tokens: inputTokens });
+    return;
+  }
 
   if (route.endpoint === 'chat') {
     let prepared;
@@ -310,6 +333,7 @@ const server = http.createServer(async (req, res) => {
       log,
       res,
       signal: null,
+      fallbackPresets,
       ...helpers,
     };
 
@@ -365,6 +389,7 @@ const server = http.createServer(async (req, res) => {
     res,
     signal: null,
     beta: { version: req.headers['anthropic-version'], header: req.headers['anthropic-beta'] },
+    fallbackPresets,
     ...helpers,
   };
 

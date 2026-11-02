@@ -39,15 +39,17 @@ MODEL_FILE="$RUN_DIR/proxy-run.model"
 HOST_FILE="$RUN_DIR/proxy-run.host"
 PORT_FILE="$RUN_DIR/proxy-run.port"
 OUT_FILE="logs/proxy-run.out"
-LOG_FILE="logs/proxy-run.log"   # okunabilir olay günlüğü (sunucu + proxy-run adımları)
+ROOT_DIR="$(pwd)"                          # betik repo köküne cd ettikten sonra
+LOG_FILE="$ROOT_DIR/logs/proxy-run.log"    # okunabilir olay günlüğü (mutlak yol: istemci cd etse de bozulmaz)
 INSTANCES_DIR="$RUN_DIR/instances"
 mkdir -p "$RUN_DIR" "$INSTANCES_DIR" logs
 
 # shellcheck source=bin/claude-env.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/claude-env.sh"
 
-rlog() {  # proxy-run adımlarını .log dosyasına yaz
-  printf '%s INFO  proxy-run %s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "$*" >> "$LOG_FILE" 2>/dev/null || true
+rlog() {  # proxy-run adımlarını .log dosyasına yaz (hata verirse sessiz geç)
+  mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
+  { printf '%s INFO  proxy-run %s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "$*" >> "$LOG_FILE"; } 2>/dev/null || true
 }
 
 node_cfg() {
@@ -730,7 +732,7 @@ if [[ -n "$INSTANCE_NAME" ]]; then
   INST_DIR="$INSTANCES_DIR/$INSTANCE_NAME"
   mkdir -p "$INST_DIR"
   OUT_FILE="logs/proxy-run-$INSTANCE_NAME.out"
-  LOG_FILE="logs/proxy-run-$INSTANCE_NAME.log"
+  LOG_FILE="$ROOT_DIR/logs/proxy-run-$INSTANCE_NAME.log"
   export PROXY_LOG_FILE="$LOG_FILE"
 fi
 export PROXY_PORT="$EFFECTIVE_PORT"
