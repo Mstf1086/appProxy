@@ -35,8 +35,13 @@ if (cmd === 'doctor') {
       console.error(`# unknown provider: ${name}`);
       continue;
     }
-    const base = `http://${cfg.server.host}:${cfg.server.port}/${name}/v1`;
-    console.log(`${name}\t${base}\t${openAiChatUrl(p)}\t${openAiModelsUrl(p)}`);
+    // The Anthropic SDK appends /v1/messages itself, so the base URL must NOT
+    // include /v1 — otherwise the request becomes /<provider>/v1/v1/messages.
+    const anthropicBase = `http://${cfg.server.host}:${cfg.server.port}/${name}`;
+    const openAiBase = `${anthropicBase}/v1`;
+    console.log(
+      `${name}\tanthropic=${anthropicBase}\topenai=${openAiBase}\tchat=${openAiChatUrl(p)}\tmodels=${openAiModelsUrl(p)}`,
+    );
   }
 } else if (cmd === 'add-provider') {
   const { runWizard } = await import('./add-provider.mjs');

@@ -261,7 +261,8 @@ status_proxy() {
     echo "    Provider : $provider"
     echo "    Model    : $model"
     echo "    OpenAI   : http://$host:$port/$provider/v1"
-    echo "    Anthropic: http://$host:$port/$provider/v1"
+    # Claude Code (Anthropic SDK) /v1/messages yolunu kendisi ekler; taban URL'de /v1 olmamalı.
+    echo "    Anthropic: http://$host:$port/$provider"
     echo "    Health   : $health"
   done <<< "$running"
   return 0
