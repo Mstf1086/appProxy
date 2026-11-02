@@ -24,6 +24,41 @@ export function redactHeaders(headers = {}) {
   return out;
 }
 
+/**
+ * Fields for logging an upstream error body.
+ *
+ * Error payloads are not safe by default: a 400 from any provider typically
+ * echoes the offending prompt/messages back in `error.message`, so writing the
+ * body into logs breaks the "request bodies are never logged" promise. Unless
+ * PROXY_LOG_BODIES=1, log only the size — enough to tell an empty body from a
+ * 20 KB HTML error page.
+ */
+export function upstreamBodyFields(body, { enabled = false, max = 800 } = {}) {
+  if (typeof body !== 'string' || !body) return {};
+  const bytes = Buffer.byteLength(body, 'utf8');
+  if (!enabled) return { upstreamBodyBytes: bytes, upstreamBody: '<omitted>' };
+  return { upstreamBodyBytes: bytes, upstreamBody: body.slice(0, max) };
+}
+
+/**
+ * Keep the actionable head of an error message and drop the upstream payload.
+ *
+ * Providers echo the offending request back in their error messages
+ * (`upstream 400: messages.0.content: <prompt> ...`), so the payload can never
+ * be logged safely: it is not always JSON and not always long, which is exactly
+ * how the first version of this filter leaked the prompt. Unless
+ * PROXY_LOG_BODIES=1, only the status survives — the client still receives the
+ * full message.
+ */
+export function summarizeErrorMessage(message, { enabled = false, max = 200 } = {}) {
+  if (!message) return message;
+  const text = String(message);
+  if (enabled) return text.length > max ? `${text.slice(0, max)}…` : text;
+  const upstream = text.match(/^upstream\s+(\d{3})\s*:/i);
+  if (upstream) return `upstream ${upstream[1]}: <upstream body omitted>`;
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
 function fmtValue(value) {
   if (value === undefined) return null;
   let text = typeof value === 'string' ? value : JSON.stringify(value);
