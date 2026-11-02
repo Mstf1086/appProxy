@@ -4,6 +4,8 @@
 # Anahtar .env'deki NVIDIA_API_KEY'den okunur; ekrana/loga yazılmaz.
 set -uo pipefail
 cd "$(dirname "$0")/.."
+mkdir -p logs
+exec > >(tee logs/smoke-result.txt) 2>&1   # çıktı hem ekrana hem dosyaya
 MODEL="${1:-z-ai/glm-5.3-flash}"
 PORT="${PROXY_PORT:-8791}"
 set -a; [ -f .env ] && . ./.env; set +a

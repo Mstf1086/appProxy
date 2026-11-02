@@ -540,6 +540,8 @@ appProxy/
 | Provider listede görünmüyor | `config/providers.json` güncel değil | `bin/proxy-run add` ile yeniden ekleyin |
 | Model keşfi başarısız | Upstream kapalı / anahtar hatalı | `npm run models <provider>` ile deneyin, `PROXY_LOG_BODIES=1` ile logları artırın |
 | `There's an issue with the selected model` | Upstream seçilen/hızlı modeli sunmuyor | `tail -n 30 logs/proxy-run.log` içindeki `request.failed` satırına (`status`, `upstreamBody`) bakın; takma adlar `bin/claude-env.sh` ile eşlenir; gerekirse `fastModel`'i değiştirin ([Model Eşlemesi](#-claude-code-model-eşlemesi-ve-fallback)) |
+| `selected model` hatası, log'da `/v1/v1/messages` | `ANTHROPIC_BASE_URL` sonunda fazladan `/v1` var (Claude Code yola `/v1/messages` kendisi ekler) | Taban URL `http://127.0.0.1:8790/<provider>` olmalı (`proxy-run` artık böyle ayarlar; sunucu çift `/v1`'i de tolere eder) |
+| `ESKİ bir proxy çalışıyor` | Önceki sürüm proxy portu tutuyor | `bin/proxy-run stop all`, sonra yeniden başlatın |
 | `route.unknown` / 404 `not found` | İstemci desteklenmeyen bir yola istek attı | Log'daki `path` değerine bakın, `ANTHROPIC_BASE_URL`'in `/<provider>` ile bittiğini doğrulayın |
 | `proxy-run: command not found` | Alias yüklenmedi | `source ~/.bashrc` veya `install.sh`'i yeniden çalıştırın |
 | Anahtar `.git`'e gitmişse | `.env` yanlışlıkla eklenmiş | `git rm --cached .env` + anahtarları rotasyona uğratın |

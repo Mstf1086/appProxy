@@ -632,7 +632,9 @@ CLIENT_HOST="$CFG_HOST"
 [[ "$CLIENT_HOST" == "0.0.0.0" || "$CLIENT_HOST" == "::" ]] && CLIENT_HOST="127.0.0.1"
 SERVER_URL="http://${CLIENT_HOST}:${EFFECTIVE_PORT}"
 OPENAI_BASE="${SERVER_URL}/${PROVIDER}/v1"
-ANTHROPIC_BASE="${OPENAI_BASE}"
+# Claude Code (Anthropic SDK) yola kendisi /v1/messages ekler: taban URL "/v1" İÇERMEMELİ,
+# yoksa istek /<provider>/v1/v1/messages olur, 404 döner ve "selected model" hatası görünür.
+ANTHROPIC_BASE="${SERVER_URL}/${PROVIDER}"
 
 # --- İstemci seçimi (model seçiminden SONRA) -------------------------------
 if [[ "$FOREGROUND" != "1" && -z "${CLIENT:-}" ]]; then
@@ -696,7 +698,7 @@ print_summary() {
   echo "  Model    : $MODEL"
   echo "  Proxy    : $SERVER_URL"
   echo "  OpenAI   : $OPENAI_BASE  (POST /chat/completions, GET /models)"
-  echo "  Anthropic: $ANTHROPIC_BASE  (POST /messages)"
+  echo "  Anthropic: $ANTHROPIC_BASE  (POST /v1/messages)"
 }
 
 print_instructions() {
@@ -784,7 +786,18 @@ for _ in {1..50}; do
   sleep 0.2
 done
 
-if ! curl -sf "${SERVER_URL}/health" >/dev/null 2>&1; then
+HEALTH_JSON="$(curl -sf "${SERVER_URL}/health" 2>/dev/null || true)"
+# Sağlık yanıtı geldi ama yeni süreç ölmüşse (EADDRINUSE), yanıtı ESKİ bir proxy vermiştir.
+sleep 0.3
+if [[ -n "$HEALTH_JSON" ]] && ! kill -0 "$PID" 2>/dev/null; then
+  echo "HATA: ${SERVER_URL} adresinde ESKİ bir proxy çalışıyor (yeni pid $PID portu alamadı)." >&2
+  echo "      Durdurun: bin/proxy-run stop all   (gerekirse: pkill -f 'src/server.mjs')" >&2
+  rlog "ERROR stale proxy on $SERVER_URL; new pid $PID did not bind"
+  cleanup_failed_start
+  kill "$PID" 2>/dev/null || true
+  exit 1
+fi
+if [[ -z "$HEALTH_JSON" ]]; then
   echo "HATA: proxy 10 saniye içinde yanıt vermedi. Son loglar:" >&2
   tail -n 30 "$OUT_FILE" >&2 || true
   exit 1

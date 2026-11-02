@@ -27,7 +27,8 @@ const defaultProvider =
   process.env.DEFAULT_PROVIDER || process.env.PROVIDER || process.argv[2] || 'openrouter';
 
 function parseRoute(rawUrl) {
-  const pathname = new URL(rawUrl, 'http://localhost').pathname.replace(/\/+$/, '') || '/';
+  // Tolerate a base URL that already ends in /v1 (-> /<provider>/v1/v1/messages).
+  const pathname = (new URL(rawUrl, 'http://localhost').pathname.replace(/\/+$/, '') || '/').replace(/\/v1\/v1\//g, '/v1/');
   let m;
   if ((m = pathname.match(/^\/([a-z0-9_-]+)\/v1\/messages$/))) {
     return { endpoint: 'messages', provider: m[1], protocol: 'anthropic' };
@@ -198,7 +199,7 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && (pathname === '/health' || pathname === '/healthz')) {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, defaultProvider, providers: Object.keys(cfg.providers) }));
+    res.end(JSON.stringify({ ok: true, pid: process.pid, defaultProvider, providers: Object.keys(cfg.providers) }));
     return;
   }
 
