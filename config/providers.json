@@ -44,16 +44,6 @@
       "normalizeAdaptiveThinking": true,
       "docNote": "Resmi Claude Code kurulumu: ANTHROPIC_BASE_URL=https://openrouter.ai/api (docs/openrouter/claude-code-integration.md)"
     },
-    "refuseless": {
-      "kind": "openai",
-      "baseUrl": "https://api.refuseless.com/v1",
-      "apiKeyEnv": "REFUSELESS_API_KEY",
-      "defaultModel": "glm-5.3-abliterated",
-      "fastModel": "glm-5.3-flash-abliterated",
-      "maxTokensField": "max_tokens",
-      "streamIncludeUsage": true,
-      "mapReasoningToThinking": true
-    },
     "apinex": {
       "kind": "openai",
       "baseUrl": "https://api.apinex.bond/v1",
@@ -73,16 +63,6 @@
       "fastModel": "command-r7b-12-2024",
       "docNote": "Cohere v2 chat: docs.cohere.com/reference/chat"
     },
-    "anyrouter": {
-      "kind": "openai",
-      "baseUrl": "https://anyrouter.dev/api/v1",
-      "apiKeyEnv": "ANYROUTER_API_KEY",
-      "maxTokensField": "max_tokens",
-      "streamIncludeUsage": true,
-      "mapReasoningToThinking": true,
-      "defaultModel": "anyrouter/auto",
-      "docNote": "anyrouter: sihirbaz ile eklendi (bin/proxy-run)"
-    },
     "nvidia": {
       "kind": "openai",
       "baseUrl": "https://integrate.api.nvidia.com/v1",
@@ -93,6 +73,26 @@
       "defaultModel": "nvidia/llama-3.1-nemotron-70b-instruct",
       "fastModel": "z-ai/glm-5.3-flash",
       "docNote": "nvidia: sihirbaz ile eklendi (bin/proxy-run)"
+    },
+    "beatapi": {
+      "kind": "openai",
+      "baseUrl": "https://api.beatapi.io/v1",
+      "apiKeyEnv": "BEATAPI_API_KEY",
+      "maxTokensField": "max_tokens",
+      "streamIncludeUsage": true,
+      "mapReasoningToThinking": true,
+      "defaultModel": "glm-5.3",
+      "docNote": "beatapi: sihirbaz ile eklendi (bin/proxy-run)"
+    },
+    "zenmux": {
+      "kind": "openai",
+      "baseUrl": "https://zenmux.ai/api/v1",
+      "apiKeyEnv": "ZENMUX_API_KEY",
+      "maxTokensField": "max_tokens",
+      "streamIncludeUsage": true,
+      "mapReasoningToThinking": true,
+      "defaultModel": "z-ai/glm-5v-turbo",
+      "docNote": "zenmux: sihirbaz ile eklendi (bin/proxy-run)"
     }
   }
 }

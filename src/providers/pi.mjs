@@ -57,6 +57,32 @@ const PI_MANAGED_MARKER = 'appProxy';
 const PI_MAX_TOKENS_DEFAULT = 8192;
 const PI_CONTEXT_DEFAULT = 128000;
 
+/**
+ * Build one Pi model definition from appProxy provider metadata.
+ * Local/self-hosted providers can declare their real context and output limits
+ * instead of inheriting the conservative hosted-provider defaults.
+ */
+export function buildPiModelDefinition(id, preset, providerCfg, contextByModel = {}) {
+  const configuredContext = Number.isFinite(providerCfg.contextWindow) && providerCfg.contextWindow > 0
+    ? providerCfg.contextWindow
+    : PI_CONTEXT_DEFAULT;
+  const configuredMaxTokens = Number.isFinite(providerCfg.maxTokens) && providerCfg.maxTokens > 0
+    ? providerCfg.maxTokens
+    : PI_MAX_TOKENS_DEFAULT;
+  const contextWindow = contextByModel[id] ?? configuredContext;
+
+  const definition = {
+    id,
+    name: preset?.label ?? id,
+    contextWindow,
+    maxTokens: Math.min(configuredMaxTokens, contextWindow),
+  };
+  if (providerCfg.samplingParams) {
+    definition.samplingParams = { ...providerCfg.samplingParams };
+  }
+  return definition;
+}
+
 /** Pi agent dizini (~/.pi/agent; PI_CODING_AGENT_DIR ile değiştirilebilir). */
 export function piAgentDir() {
   return process.env.PI_CODING_AGENT_DIR
@@ -184,14 +210,7 @@ export async function ensurePiCustomProvider(cfg, providerName, modelId) {
 
   const models = [...ids].sort((a, b) => a.localeCompare(b)).map((id) => {
     const preset = presets.find((pr) => pr.id === id);
-    const ctx = contextByModel[id] ?? PI_CONTEXT_DEFAULT;
-    return {
-      id,
-      name: preset?.label ?? id,
-      contextWindow: ctx,
-      // API'nin model üst sınırını aşmamak için güvenli çıktı limiti.
-      maxTokens: Math.min(PI_MAX_TOKENS_DEFAULT, ctx),
-    };
+    return buildPiModelDefinition(id, preset, p, contextByModel);
   });
 
   doc.providers[providerName] = {

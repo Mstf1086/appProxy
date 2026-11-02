@@ -52,6 +52,19 @@ Her iki istemci de proxy arkada çalışırken açılır; çıktıktan sonra pro
 durdurmak için `bin/proxy-run stop` (isimli örnek için `bin/proxy-run stop <isim>`,
 tümü için `bin/proxy-run stop all`). İstemci, `proxy-run`'ın çağrıldığı dizinde başlar.
 
+### Yerel LFM3 + Pi CLI
+
+LFM3 sağlayıcısı yerel `llama-server` API'sine bağlanır:
+
+```bash
+cd /data/home/appTest
+./scripts/start_llama_server.sh
+proxy-run lfm3 LFM3-1.7B-Q8_0 --client pi
+```
+
+`./scripts/proxy_run_pi.sh` komutu her ikisini tek adımda yapar. Yerel API
+streaming ve OpenAI tool-calling destekler.
+
 El ile bağlanmak istersen (ör. ayrı bir terminalden):
 
 ```bash

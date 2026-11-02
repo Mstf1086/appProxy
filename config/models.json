@@ -127,33 +127,6 @@
       }
     ]
   },
-  "refuseless": {
-    "passthroughPrefixes": [
-      "glm-5.3-"
-    ],
-    "rules": [
-      {
-        "match": "*flash*",
-        "model": "glm-5.3-flash-abliterated"
-      },
-      {
-        "match": "*",
-        "model": "glm-5.3-abliterated"
-      }
-    ],
-    "presets": [
-      {
-        "id": "glm-5.3-abliterated",
-        "label": "GLM 5.3 Abliterated",
-        "description": "Frontier coding and cyber"
-      },
-      {
-        "id": "glm-5.3-flash-abliterated",
-        "label": "GLM 5.3 Flash Abliterated",
-        "description": "Cost-effective"
-      }
-    ]
-  },
   "apinex": {
     "passthroughPrefixes": [
       "free/"
@@ -239,70 +212,6 @@
       }
     ]
   },
-  "anyrouter": {
-    "passthroughPrefixes": [
-      "anyrouter/",
-      "apple/",
-      "baai/",
-      "cohere/",
-      "deepseek/",
-      "dots-studio/",
-      "fastino/",
-      "hal-x/",
-      "inception/",
-      "inclusionai/",
-      "intfloat/",
-      "jaredpalmer/"
-    ],
-    "rules": [
-      {
-        "match": "*",
-        "model": "anyrouter/auto"
-      }
-    ],
-    "presets": [
-      {
-        "id": "anyrouter/auto",
-        "label": "anyrouter/auto",
-        "description": "sihirbaz ile eklendi"
-      },
-      {
-        "id": "anyrouter/cowork",
-        "label": "anyrouter/cowork",
-        "description": "sihirbaz ile eklendi"
-      },
-      {
-        "id": "anyrouter/decision",
-        "label": "anyrouter/decision",
-        "description": "sihirbaz ile eklendi"
-      },
-      {
-        "id": "anyrouter/free",
-        "label": "anyrouter/free",
-        "description": "sihirbaz ile eklendi"
-      },
-      {
-        "id": "anyrouter/hermes",
-        "label": "anyrouter/hermes",
-        "description": "sihirbaz ile eklendi"
-      },
-      {
-        "id": "anyrouter/latest",
-        "label": "anyrouter/latest",
-        "description": "sihirbaz ile eklendi"
-      },
-      {
-        "id": "apple/foundation-model",
-        "label": "apple/foundation-model",
-        "description": "sihirbaz ile eklendi"
-      },
-      {
-        "id": "baai/bge-base-en-v1.5",
-        "label": "baai/bge-base-en-v1.5",
-        "description": "sihirbaz ile eklendi"
-      }
-    ]
-  },
   "nvidia": {
     "passthroughPrefixes": [
       "nvidia/",
@@ -354,5 +263,130 @@
       }
     ],
     "defaultModel": null
+  },
+  "beatapi": {
+    "passthroughPrefixes": [],
+    "rules": [
+      {
+        "match": "*",
+        "model": "glm-5.3"
+      }
+    ],
+    "presets": [
+      {
+        "id": "glm-5.3",
+        "label": "glm-5.3",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "claude-opus-5-5",
+        "label": "claude-opus-5-5",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "claude-sonnet-5-5",
+        "label": "claude-sonnet-5-5",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "deepseek-v4.1-flash",
+        "label": "deepseek-v4.1-flash",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "deepseek-v4.1-flash-free",
+        "label": "deepseek-v4.1-flash-free",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "gemini-3.1-flash-image-preview",
+        "label": "gemini-3.1-flash-image-preview",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "gemini-3.8-flash",
+        "label": "gemini-3.8-flash",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "gemini-3.8-flash-free",
+        "label": "gemini-3.8-flash-free",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "gemini-nano-banana-2.1",
+        "label": "gemini-nano-banana-2.1",
+        "description": "sihirbaz ile eklendi"
+      }
+    ]
+  },
+  "zenmux": {
+    "passthroughPrefixes": [
+      "z-ai/",
+      "alibaba/",
+      "anthropic/",
+      "atria-asi/",
+      "baidu/",
+      "bfl/",
+      "bytedance/",
+      "cloudflare/",
+      "deepseek/",
+      "dots-studio/",
+      "google/",
+      "inclusionai/"
+    ],
+    "rules": [
+      {
+        "match": "*",
+        "model": "z-ai/glm-5v-turbo"
+      }
+    ],
+    "presets": [
+      {
+        "id": "z-ai/glm-5v-turbo",
+        "label": "z-ai/glm-5v-turbo",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "alibaba/wan3.0-video",
+        "label": "alibaba/wan3.0-video",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "alibaba/wan3.0-video-prime",
+        "label": "alibaba/wan3.0-video-prime",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anthropic/claude-fable-5",
+        "label": "anthropic/claude-fable-5",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anthropic/claude-fable-5.1",
+        "label": "anthropic/claude-fable-5.1",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anthropic/claude-haiku-4.5",
+        "label": "anthropic/claude-haiku-4.5",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anthropic/claude-haiku-5.5",
+        "label": "anthropic/claude-haiku-5.5",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anthropic/claude-opus-4.1",
+        "label": "anthropic/claude-opus-4.1",
+        "description": "sihirbaz ile eklendi"
+      },
+      {
+        "id": "anthropic/claude-opus-4.5",
+        "label": "anthropic/claude-opus-4.5",
+        "description": "sihirbaz ile eklendi"
+      }
+    ]
   }
 }

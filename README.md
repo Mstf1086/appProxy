@@ -155,6 +155,30 @@ bin/proxy-run openrouter           # provider + model + istemci interaktif
 bin/proxy-run openrouter gpt-4o    # provider + model sabit, istemci interaktif
 ```
 
+#### Yerel LFM3 modeliyle Pi CLI
+
+`lfm3` sağlayıcısı, `/data/home/appTest` projesindeki yerel `llama-server`
+OpenAI API'sine bağlanır. Önce model sunucusunu başlatın:
+
+```bash
+cd /data/home/appTest
+./scripts/start_llama_server.sh
+```
+
+Ardından Pi CLI'yi şu komutla açın:
+
+```bash
+cd /data/home/appTest
+proxy-run lfm3 LFM3-1.7B-Q8_0 --client pi
+```
+
+Bu akış `~/.pi/agent/models.json` içine `lfm3` sağlayıcısını yazar; Pi
+streaming ve tool-calling destekleyen yerel OpenAI ucuna doğrudan bağlanır.
+LFM3 bağlamı 32768 token, maksimum çıktı 4096 token olarak tanımlıdır.
+Pi'nin her istekte ayırdığı 4096 tokenlık güvenlik payı nedeniyle 8K context
+uzun araç konuşmalarında `max_tokens=1`e düşebiliyordu; 32K context bu durumu
+giderir.
+
 Proxy çalışırken durdurmak: `bin/proxy-run stop` (isimli örnek için
 `bin/proxy-run stop <isim>`, tümü için `bin/proxy-run stop all`). Durum:
 `bin/proxy-run status`.
