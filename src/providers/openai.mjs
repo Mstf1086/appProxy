@@ -1,17 +1,30 @@
 /**
- * OpenAI Chat Completions provider (used for NVIDIA hosted NIM).
+ * OpenAI Chat Completions upstream (NVIDIA hosted NIM, Gemini OpenAI-compat, any
+ * OpenAI-compatible gateway).
  *
  * docs/nvidia/nim-api-reference.md → "POST /v1/chat/completions ... Supports
- * streaming and tool calling". The hosted endpoint serves no Anthropic-format
- * route, so the proxy translates both directions.
+ * streaming and tool calling". These upstreams serve no Anthropic-format route,
+ * so the proxy translates both directions.
+ *
+ * `runOpenAiChat` holds the whole request/response pipeline so every
+ * OpenAI-shaped upstream (openai.mjs, gemini.mjs) shares one code path instead of
+ * forking the SSE translation.
  */
 import { UpstreamError, rateLimitHeadersFrom, retryHeadersFrom } from '../errors.mjs';
 import { anthropicAuthHeaders, readJsonLoose, readSseEvents, upstreamFetch } from '../http.mjs';
 import { AnthropicStream, buildMessage } from '../sse.mjs';
 import { OpenAiStreamAdapter, fromOpenAiResponse } from '../translate/openai-in.mjs';
 import { toOpenAiRequest } from '../translate/openai-out.mjs';
+import { applyGeminiSignatures, captureGeminiSignatures, StreamSignatureCapture } from '../gemini-signature.mjs';
 
-export async function handleOpenAiProvider(ctx) {
+/**
+ * Send one converted request to an OpenAI-compatible endpoint and translate the
+ * answer back into Anthropic Messages (JSON or SSE).
+ *
+ * @param {object} ctx provider handler context
+ * @param {{url: string, headers: object, captureSignatures?: boolean}} target
+ */
+export async function runOpenAiChat(ctx, { url, headers, captureSignatures = false }) {
   const { providerCfg, request, meta, res, log, signal, sendJsonResponse } = ctx;
   const wantsStream = Boolean(request.stream);
 
@@ -22,13 +35,13 @@ export async function handleOpenAiProvider(ctx) {
   });
   if (droppedBlocks.length) meta.dropped = [...(meta.dropped ?? []), ...droppedBlocks];
 
-  const url = `${providerCfg.baseUrl.replace(/\/$/, '')}/chat/completions`;
-  const headers = {
-    'content-type': 'application/json',
-    accept: wantsStream ? 'text/event-stream' : 'application/json',
-    'user-agent': 'appProxy/0.1',
-    ...anthropicAuthHeaders(ctx.apiKey, { providerCfg }),
-  };
+  // Gemini 3+ requires the thought_signature of every earlier tool call to be
+  // echoed back; clients (and our own Anthropic translation) drop it, so it is
+  // re-attached here by tool-call id.
+  if (captureSignatures) {
+    const patched = applyGeminiSignatures(body);
+    if (patched) log.info('gemini.signature.injected', { provider: providerCfg.name, count: patched });
+  }
 
   log.info('upstream.request', { provider: providerCfg.name, url, model: request.model, stream: wantsStream });
   const response = await upstreamFetch(url, {
@@ -60,6 +73,7 @@ export async function handleOpenAiProvider(ctx) {
 
   if (!wantsStream) {
     const json = await readJsonLoose(response);
+    if (captureSignatures) captureGeminiSignatures(json);
     const converted = fromOpenAiResponse(json, { requestedModel: meta.requestedModel ?? request.model });
     meta.usage = converted.usage;
     sendJsonResponse(
@@ -81,6 +95,7 @@ export async function handleOpenAiProvider(ctx) {
     upstreamModel: request.model,
     mapReasoning: providerCfg.mapReasoningToThinking !== false,
   });
+  const capture = captureSignatures ? new StreamSignatureCapture() : null;
   stream.writeHead();
   log.info('upstream.stream.open', { provider: providerCfg.name, url, model: request.model });
 
@@ -94,8 +109,10 @@ export async function handleOpenAiProvider(ctx) {
         continue;
       }
       if (chunk?.error) throw new UpstreamError(chunk.error.message ?? 'upstream error', { status: 502 });
+      capture?.handleChunk(chunk);
       adapter.feed(chunk);
     }
+    capture?.finish();
     adapter.done();
     meta.usage = adapter.usage;
   } catch (error) {
@@ -108,4 +125,17 @@ export async function handleOpenAiProvider(ctx) {
   } finally {
     stream.end();
   }
+}
+
+/** OpenAI-compatible upstream: {baseUrl}/chat/completions with bearer + x-api-key. */
+export async function handleOpenAiProvider(ctx) {
+  const { providerCfg, request } = ctx;
+  const url = `${providerCfg.baseUrl.replace(/\/$/, '')}/chat/completions`;
+  const headers = {
+    'content-type': 'application/json',
+    accept: request.stream ? 'text/event-stream' : 'application/json',
+    'user-agent': 'appProxy/0.1',
+    ...anthropicAuthHeaders(ctx.apiKey, { providerCfg }),
+  };
+  return runOpenAiChat(ctx, { url, headers });
 }
