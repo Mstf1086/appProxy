@@ -410,5 +410,52 @@
         "description": "Yerel llama-server (32K baglam, 4K cikti)"
       }
     ]
+  },
+  "amd": {
+    "passthroughPrefixes": [
+      "DeepSeek-",
+      "Qwen",
+      "MiniCPM"
+    ],
+    "rules": [
+      {
+        "match": "*haiku*",
+        "model": "DeepSeek-V4-Flash-0731"
+      },
+      {
+        "match": "*sonnet*",
+        "model": "DeepSeek-V4-Flash-0731"
+      },
+      {
+        "match": "*opus*",
+        "model": "DeepSeek-V4-Flash-0731"
+      },
+      {
+        "match": "*",
+        "model": "DeepSeek-V4-Flash-0731"
+      }
+    ],
+    "presets": [
+      {
+        "id": "DeepSeek-V4-Flash-0731",
+        "label": "DeepSeek V4 Flash 0731",
+        "description": "Ucretsiz LLM (Token Factory), ajan kullanimi icin en dengeli secim"
+      },
+      {
+        "id": "DeepSeek-V4-Flash-Vision-Exp",
+        "label": "DeepSeek V4 Flash Vision (Exp)",
+        "description": "Ucretsiz VLM, goruntu destekli deneysel surum"
+      },
+      {
+        "id": "Qwen3.8-Flash-Next",
+        "label": "Qwen3.8 Flash Next",
+        "description": "Ucretsiz VLM"
+      },
+      {
+        "id": "MiniCPM5-1B",
+        "label": "MiniCPM5 1B",
+        "description": "Ucretsiz kucuk model, hizli ama zayif"
+      }
+    ]
   }
 }

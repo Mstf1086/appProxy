@@ -112,6 +112,17 @@
       "maxOutputTokens": 4096,
       "docNote": "lfm3: yerel llama-server (OpenAI uyumlu). Pi guvenlik payi 4096 oldugu icin 32K baglam.",
       "maxTokens": 4096
+    },
+    "amd": {
+      "kind": "openai",
+      "baseUrl": "https://developer.amd.com.cn/radeon/api/v1",
+      "apiKeyEnv": "AMD_API_KEY",
+      "maxTokensField": "max_tokens",
+      "streamIncludeUsage": true,
+      "mapReasoningToThinking": true,
+      "defaultModel": "DeepSeek-V4-Flash-0731",
+      "fastModel": "DeepSeek-V4-Flash-0731",
+      "docNote": "AMD Radeon Cloud / Token Factory (developer.amd.com.cn): OpenAI uyumlu, Bearer API anahtari. Ucretsiz modeller: DeepSeek-V4-Flash-0731, DeepSeek-V4-Flash-Vision-Exp, Qwen3.8-Flash-Next, MiniCPM5-1B."
     }
   }
 }

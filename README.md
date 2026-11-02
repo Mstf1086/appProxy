@@ -207,6 +207,33 @@ başlatılan proxy'leri durdurur (isimli örnek için `bin/proxy-run stop <isim>
 bu kurulumdaki her şey için `bin/proxy-run stop all`). Durum:
 `bin/proxy-run status`.
 
+#### AMD Radeon Cloud / Token Factory (ücretsiz OpenAI uyumlu uç)
+
+`https://developer.amd.com.cn/radeon/api/v1` OpenAI uyumludur; Claude Code ise
+Anthropic konuşur. Araya appProxy girer — `amd` sağlayıcısı hazır gelir
+(`config/providers.json`), anahtar `Authorization: Bearer` olarak gönderilir.
+
+1. Anahtar alın: [developer.amd.com.cn/login](https://developer.amd.com.cn/login)
+   → giriş → **Token Factory** → ücretsiz bir model (ör. `DeepSeek-V4-Flash-0731`)
+   → **API KEY** kopyala.
+2. `.env` dosyasına yazın: `AMD_API_KEY=<anahtar>`
+3. Başlatın:
+
+```bash
+bin/proxy-run amd                          # canlı model listesinden seç
+bin/proxy-run amd DeepSeek-V4-Flash-0731 --client claude
+```
+
+Ücretsiz (Public Free) modeller: `DeepSeek-V4-Flash-0731` (LLM),
+`DeepSeek-V4-Flash-Vision-Exp` (VLM), `Qwen3.8-Flash-Next` (VLM),
+`MiniCPM5-1B` (küçük). Claude takma adları (`*sonnet*`, `*opus*`, `*haiku*`)
+`DeepSeek-V4-Flash-0731`'e eşlenir; sağlayıcının kendi kimlikleri
+(`DeepSeek-*`, `Qwen*`, `MiniCPM*`) olduğu gibi geçer.
+
+Doğrudan OpenAI istemcileri için proxy adresi: `http://127.0.0.1:8790/amd/v1`.
+Notlar: kullanım token bazında sayılır (kotası belirsiz), çıktı hızı ~800 tok/s
+— uzun ajan oturumlarında yavaş kalabilir. `--client pi` de desteklenir.
+
 ### Adım 6 — Test Edin
 
 ```bash
@@ -423,7 +450,7 @@ npm test           # tüm testler
 - OpenAI (SDK / OpenAI-uyumlu istemciler): `http://127.0.0.1:8790/<provider>/v1/chat/completions`
 - Model listesi: `http://127.0.0.1:8790/<provider>/v1/models`
 
-`<provider>` ∈ `gemini`, `nvidia`, `openrouter`, `cohere`, `refuseless` +
+`<provider>` ∈ `gemini`, `nvidia`, `openrouter`, `cohere`, `amd`, `lfm3` +
 `sihirbazla eklenenler`. Yol belirtilmezse `DEFAULT_PROVIDER` kullanılır.
 
 ---
