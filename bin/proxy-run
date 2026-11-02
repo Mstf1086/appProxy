@@ -9,6 +9,8 @@
 #   proxy-run <provider> <model> --client claude  # soru sormadan Claude Code'u başlat
 #   proxy-run <provider> <model> --client none   # sadece proxy'yi başlat
 #   proxy-run <provider> <model> --client pi     # proxy + Pi CLI'ı (https://pi.dev) başlat
+#   proxy-run <isim>                       # ÇALIŞAN proxy'ye yeniden bağlan (istemci seç)
+#   proxy-run attach <isim> [--client claude]     # aynısı, açık yazım
 #   proxy-run <provider> --list            # sadece modelleri listele
 #   proxy-run <provider> --filter kimi     # model listesini filtrele
 #   proxy-run --foreground <provider> <model>
@@ -31,6 +33,13 @@
 #
 # Her örnek başlatıldığı proje diziniyle kaydedilir: `proxy-run stop` yalnızca
 # bu projenin proxy'lerini durdurur, başka projelerinki etkilenmez.
+#
+# Yeniden bağlanma: proxy arka planda çalışmaya devam ettiği için istemciden
+# (/exit) çıktıktan sonra `proxy-run <isim>` ile aynı proxy'ye dönülür. Bu
+# çağrı YENİ proxy başlatmaz, provider/model sormaz; yalnızca istemci seçtirir
+# (claude / pi / istemci yok) ve kayıtlı port ile modele bağlanır.
+# İlk argüman hem bir provider hem bir örnek adıysa provider kazanır
+# (geriye dönük uyumluluk); örnek adına açıkça bağlanmak için `attach` kullanın.
 set -euo pipefail
 
 ORIG_PWD="$PWD"
@@ -77,6 +86,8 @@ Kullanım:
   proxy-run <provider> <model>                  model sabit, istemci interaktif
   proxy-run <provider> <model> --client claude  proxy + Claude Code'u başlat
   proxy-run <provider> <model> --client none   sadece proxy'yi başlat
+  proxy-run <isim>                              ÇALIŞAN proxy'ye yeniden bağlan
+  proxy-run attach <isim> [--client claude]     aynısı (açık yazım)
   proxy-run <provider> --list                   sadece modelleri listele
   proxy-run <provider> --filter <metin>         model listesini filtrele
   proxy-run --foreground <provider> <model>     proxy'yi ön planda çalıştır
@@ -104,6 +115,13 @@ proje diziniyle birlikte kaydedilir:
   - "Kapat" seçilirse önceki örnek(ler) durur ve aynı port yeniden kullanılır,
   - "Açık kalsın" seçilirse yeni proxy'ye bir isim verilir ve boş bir portta
     açılır (örnekler: proxy-run status / proxy-run stop <isim> / stop all).
+
+Yeniden bağlanma (istemciden çıktıktan sonra):
+  proxy-run <isim>              çalışan proxy'ye döner; yalnızca istemci sorulur
+  proxy-run attach <isim>       aynısı, isim bir provider ile çakışıyorsa bunu kullanın
+  proxy-run <isim> --client claude   soru sormadan doğrudan Claude Code
+  Var olan proxy kullanılır: yeni süreç başlatılmaz, port/model kayıttan okunur.
+  Proxy kapalıysa hata verir; yeniden başlatmak için proxy-run <provider> <model>.
 
 Seçenekler:
   -c, --client <claude|pi|none>        Model seçiminden sonra başlatılacak istemci
@@ -309,6 +327,188 @@ stop_instances() {
   return 0
 }
 
+# Çalışan bir örneğin kayıt satırını döndürür (yoksa boş + çıkış kodu 1).
+# $1: örnek ismi ("default" = isimsiz varsayılan)
+running_instance_row() {
+  local want="${1:-default}" name pid host port provider model project
+  while IFS=$'\t' read -r name pid host port provider model project; do
+    [[ -n "$name" ]] || continue
+    [[ "$name" == "$want" ]] || continue
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$pid" "$host" "$port" "$provider" "$model" "$project"
+    return 0
+  done < <(list_running_instances)
+  return 1
+}
+
+# Çalışan örneklerden birini seçtirir; tek örnek varsa doğrudan onu döndürür.
+# `select` menüsü stderr'e yazılır, bu yüzden stdout yalnızca isim taşır.
+pick_running_instance() {
+  local -a names=()
+  local n rest choice=""
+  while IFS=$'\t' read -r n rest; do
+    [[ -n "$n" ]] && names+=("$n")
+  done < <(list_running_instances)
+  if [[ ${#names[@]} -eq 0 ]]; then
+    return 1
+  fi
+  if [[ ${#names[@]} -eq 1 ]]; then
+    printf '%s' "${names[0]}"
+    return 0
+  fi
+  echo "Hangi proxy'ye bağlanılsın?" >&2
+  select choice in "${names[@]}"; do
+    [[ -n "$choice" ]] && break
+  done
+  [[ -n "$choice" ]] || return 1
+  printf '%s' "$choice"
+}
+
+# Claude Code'u verilen taban URL ile başlatır ve çıkış kodunu döndürür.
+# $1: Anthropic taban URL (/v1 İÇERMEZ), $2: model, $3: hızlı model
+run_claude_client() {
+  local base="$1" model="$2" fast="$3" ctx rc=0
+  export DEFAULT_PROVIDER="$PROVIDER"
+  # Takma adları (haiku/sonnet/opus/alt ajan) seçilen modele yönlendir (NVIDIA NIM kılavuzu).
+  ctx="$(node src/context-window.mjs "$PROVIDER" "$model" 2>/dev/null || echo 200000)"
+  apply_claude_env "$base" "$TOKEN_ARG" "$model" "$fast" "$ctx"
+  rlog "claude env model=$ANTHROPIC_MODEL haiku=$ANTHROPIC_DEFAULT_HAIKU_MODEL sonnet=$ANTHROPIC_DEFAULT_SONNET_MODEL opus=$ANTHROPIC_DEFAULT_OPUS_MODEL subagent=$CLAUDE_CODE_SUBAGENT_MODEL context=$CLAUDE_CODE_MAX_CONTEXT_TOKENS"
+  cd "$ORIG_PWD"
+  claude || rc=$?
+  rlog "client exit claude code=$rc"
+  return "$rc"
+}
+
+# Çalışan bir örneğe YENİDEN BAĞLANIR: yeni proxy başlatmaz, provider/model
+# sormaz; kayıtlı port ve modelle istemciyi açar. İstemciden /exit ile çıkıp
+# aynı proxy'ye dönmek için kullanılır.
+# $1: örnek ismi ("default" = isimsiz), $2: istemci (claude|pi|none|"")
+attach_instance() {
+  local name="${1:-default}" want_client="${2:-}"
+  local row r_name r_pid r_host r_port r_provider r_model r_project label
+
+  row="$(running_instance_row "$name" || true)"
+  if [[ -z "$row" ]]; then
+    echo "HATA: '$name' adlı çalışan proxy yok." >&2
+    echo "  Çalışan örnekler : bin/proxy-run status" >&2
+    echo "  Yeni proxy       : bin/proxy-run <provider> <model>" >&2
+    return 1
+  fi
+  IFS=$'\t' read -r r_name r_pid r_host r_port r_provider r_model r_project <<< "$row"
+  [[ "$r_host" == "0.0.0.0" || "$r_host" == "::" ]] && r_host="127.0.0.1"
+  label="$r_name"
+  [[ "$r_name" == "default" ]] && label="default (isimsiz)"
+
+  # Kayıt var ama süreç yanıt vermiyorsa istemciyi boşuna açmayalım.
+  if ! curl -sf --max-time 3 "http://$r_host:$r_port/health" >/dev/null 2>&1; then
+    echo "HATA: '$label' kayıtlı ama http://$r_host:$r_port/health yanıt vermiyor." >&2
+    echo "  Logları görün : tail -n 30 logs/proxy-run-${r_name}.log" >&2
+    echo "  Durdurup açın : bin/proxy-run stop $r_name && bin/proxy-run $r_provider $r_model" >&2
+    return 1
+  fi
+
+  # Kayıttan gelen provider/model ile istemci ortamını kur.
+  PROVIDER="$r_provider"
+  MODEL="$r_model"
+  local cfg_token="" cfg_fast="" cfg_key_set="no" cfg_key_env=""
+  readarray -t ACFG < <(node_cfg "
+import { loadConfig } from './src/config.mjs';
+const cfg = loadConfig();
+const p = cfg.active('$r_provider');
+console.log(cfg.proxyToken || '');
+console.log(p?.fastModel ?? '');
+console.log(cfg.apiKeyOf(p) ? 'yes' : 'no');
+console.log(p?.apiKeyEnv ?? '');
+" 2>/dev/null || true)
+  if [[ ${#ACFG[@]} -ge 4 ]]; then
+    cfg_token="${ACFG[0]}"; cfg_fast="${ACFG[1]}"; cfg_key_set="${ACFG[2]}"; cfg_key_env="${ACFG[3]}"
+  else
+    echo "UYARI: config okunamadı; proxy token'ı ve hızlı model bilinmiyor." >&2
+  fi
+  FAST_MODEL="$cfg_fast"
+  TOKEN_ARG="${cfg_token:-appproxy-local-dev}"
+  ANTHROPIC_BASE="http://$r_host:$r_port/$r_provider"
+  OPENAI_BASE="http://$r_host:$r_port/$r_provider/v1"
+  SERVER_URL="http://$r_host:$r_port"
+
+  echo
+  echo "=========================================================="
+  echo " Çalışan proxy'ye bağlanılıyor"
+  echo "=========================================================="
+  echo "  Örnek    : $label  (pid $r_pid)"
+  [[ -n "$r_project" ]] && echo "  Proje    : $r_project"
+  echo "  Provider : $r_provider"
+  echo "  Model    : $r_model"
+  echo "  Proxy    : $SERVER_URL"
+
+  if [[ -z "$want_client" ]]; then
+    # Menüden gelindiyse stdin zaten seçim için kullanılıyor (boru olabilir);
+    # yalnızca doğrudan `proxy-run <isim>` çağrısında terminal aranır.
+    if [[ ! -t 0 && "${INTERACTIVE:-0}" != "1" ]]; then
+      echo "HATA: istemci seçimi için terminal gerekli (stdin terminal değil)." >&2
+      echo "  Doğrudan seçmek için: bin/proxy-run $r_name --client claude|pi|none" >&2
+      return 1
+    fi
+    echo
+    echo "İstemci seçimi:"
+    local word
+    select word in claude "pi cli (https://pi.dev)" "sadece bağlan (istemci açma)"; do
+      [[ -n "$word" ]] && break
+    done
+    case "${word:-}" in
+      claude) want_client="claude" ;;
+      pi*)    want_client="pi" ;;
+      *)      want_client="none" ;;
+    esac
+  fi
+
+  case "$want_client" in
+    claude)
+      if ! command -v claude >/dev/null 2>&1; then
+        echo "UYARI: 'claude' bulunamadı; istemci açılmadı." >&2
+        want_client="none"
+      fi
+      ;;
+    pi)
+      if ! command -v pi >/dev/null 2>&1; then
+        echo "UYARI: 'pi' (Pi Coding Agent, https://pi.dev) bulunamadı; istemci açılmadı." >&2
+        want_client="none"
+      fi
+      ;;
+  esac
+
+  rlog "attach instance=$r_name pid=$r_pid provider=$r_provider model=$r_model client=$want_client project=$r_project"
+
+  local rc=0
+  case "$want_client" in
+    claude)
+      echo
+      echo "Claude Code başlıyor (çıkmak için /exit). Proxy arkada çalışmaya devam eder."
+      run_claude_client "$ANTHROPIC_BASE" "$MODEL" "$FAST_MODEL" || rc=$?
+      ;;
+    pi)
+      echo
+      echo "Pi CLI (https://pi.dev) başlatılıyor (çıkmak için /exit)."
+      if ! node src/providers/pi.mjs "$PROVIDER" "$MODEL" "$ORIG_PWD"; then
+        echo "UYARI: Pi CLI başlatılamadı; proxy çalışmaya devam ediyor." >&2
+        rc=1
+      fi
+      ;;
+    *)
+      echo
+      echo "İstemci açılmadı. Proxy çalışıyor: $SERVER_URL"
+      echo "  OpenAI   : $OPENAI_BASE"
+      echo "  Anthropic: $ANTHROPIC_BASE"
+      ;;
+  esac
+
+  if [[ "$want_client" != "none" ]]; then
+    echo
+    echo "İstemci kapandı (kod $rc). Proxy çalışmaya devam ediyor (pid $r_pid)."
+    echo "Tekrar bağlanmak için: bin/proxy-run $r_name"
+  fi
+  return "$rc"
+}
+
 port_busy() {  # $1: port — o portta bir TCP dinleyici var mı?
   (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
 }
@@ -466,7 +666,16 @@ status_proxy() {
   return 0
 }
 
+FORCE_ATTACH=0   # `proxy-run attach <isim>`: isim provider ile çakışsa bile bağlan
+INTERACTIVE=0    # menüden seçim yapıldıysa stdin terminal olmasa da soru sorulabilir
+
 case "${1:-}" in
+  attach|connect|baglan)
+    # Açık yazım: `proxy-run attach pr3 [--client claude]`. Geri kalan argümanlar
+    # aşağıdaki normal ayrıştırıcıya düşer (isim -> PROVIDER, istemci -> CLIENT).
+    shift
+    FORCE_ATTACH=1
+    ;;
   stop)
     shift
     STOP_TARGET=""
@@ -631,6 +840,44 @@ if [[ "$FOREGROUND" == "1" && -n "${CLIENT:-}" ]]; then
   CLIENT=""
 fi
 
+# Provider listesi erken yüklenir: `proxy-run <isim>` çağrısında ilk argümanın
+# provider mı yoksa çalışan bir örnek adı mı olduğunu ayırt etmek için gerekir.
+PROVIDERS="$(node_cfg "
+import { loadConfig } from './src/config.mjs';
+console.log(Object.keys(loadConfig().providers).join('\\n'));
+" 2>/dev/null || true)"
+
+# --- Mevcut örneğe yeniden bağlanma ----------------------------------------
+# `proxy-run <isim>`: ilk argüman bilinen bir provider DEĞİL ama çalışan bir
+# örneğin adıysa yeni proxy başlatılmaz; var olan proxy'ye istemci bağlanır.
+# İkisi de eşleşirse provider kazanır (eski davranış); açık bağlanma için
+# `proxy-run attach <isim>`.
+if [[ "$LIST_ONLY" != "1" && -z "$MODEL" && -n "${PROVIDER:-}" && "$FORCE_ATTACH" != "1" ]]; then
+  if running_instance_row "$PROVIDER" >/dev/null; then
+    if [[ -z "$PROVIDERS" ]] || ! grep -qxF -- "$PROVIDER" <<< "$PROVIDERS"; then
+      FORCE_ATTACH=1
+    fi
+  fi
+fi
+
+if [[ "$FORCE_ATTACH" == "1" ]]; then
+  if [[ "$FOREGROUND" == "1" ]]; then
+    echo "HATA: --foreground yeni bir proxy başlatır; mevcut örneğe bağlanmak için kullanılamaz." >&2
+    echo "  Bağlanmak için: bin/proxy-run ${PROVIDER:-<isim>} --client claude" >&2
+    exit 1
+  fi
+  if [[ -n "$HOST" || "$PORT_EXPLICIT" == "1" ]]; then
+    echo "UYARI: --host/--port yok sayıldı; mevcut proxy'nin kayıtlı adresi kullanılıyor." >&2
+  fi
+  if [[ -z "${PROVIDER:-}" ]]; then
+    # `proxy-run attach` (isimsiz): varsayılan (isimsiz) örneğe bağlan.
+    attach_instance "default" "${CLIENT:-}"
+  else
+    attach_instance "$PROVIDER" "${CLIENT:-}"
+  fi
+  exit $?
+fi
+
 ADD_OPTION="+ yeni provider ekle"
 
 load_providers() {
@@ -661,16 +908,32 @@ run_add_provider() {
   return 0
 }
 
-PROVIDERS="$(node_cfg "
-import { loadConfig } from './src/config.mjs';
-console.log(Object.keys(loadConfig().providers).join('\\n'));
-")"
-
 if [[ -z "$PROVIDER" ]]; then
+  # Çalışan proxy varsa provider menüsüne "mevcut proxy'ye bağlan" seçeneği
+  # eklenir: istemciden (/exit) çıktıktan sonra isim hatırlamadan devam etmek için.
+  ATTACH_OPTION=""
+  if [[ -n "$(list_running_instances)" ]]; then
+    ATTACH_OPTION="⟳ çalışan proxy'ye bağlan (yeni proxy başlatma)"
+  fi
   echo "Provider seçimi:"
-  select PROVIDER in $PROVIDERS "$ADD_OPTION"; do
-    [[ -n "$PROVIDER" ]] && break
-  done
+  INTERACTIVE=1
+  if [[ -n "$ATTACH_OPTION" ]]; then
+    select PROVIDER in $PROVIDERS "$ADD_OPTION" "$ATTACH_OPTION"; do
+      [[ -n "$PROVIDER" ]] && break
+    done
+  else
+    select PROVIDER in $PROVIDERS "$ADD_OPTION"; do
+      [[ -n "$PROVIDER" ]] && break
+    done
+  fi
+  if [[ -n "$ATTACH_OPTION" && "${PROVIDER:-}" == "$ATTACH_OPTION" ]]; then
+    ATTACH_TARGET="$(pick_running_instance)" || {
+      echo "Bağlanılacak çalışan proxy bulunamadı." >&2
+      exit 1
+    }
+    attach_instance "$ATTACH_TARGET" "${CLIENT:-}"
+    exit $?
+  fi
   if [[ "${PROVIDER:-}" == "$ADD_OPTION" ]]; then
     PROVIDER=""
     run_add_provider || true
@@ -682,7 +945,17 @@ if [[ -z "$PROVIDER" ]]; then
 else
   if ! grep -qx "$PROVIDER" <<< "$PROVIDERS"; then
     echo "HATA: bilinmeyen provider: $PROVIDER" >&2
+    # Sık karışan durum: örnek adı yazılmış ama örnek çalışmıyor (ya da kapalı).
+    RUNNING_LIST="$(list_running_instances)"
+    if [[ -n "$RUNNING_LIST" ]]; then
+      echo "Çalışan proxy örnekleri (bunlara bağlanmak için: bin/proxy-run <isim>):" >&2
+      while IFS=$'\t' read -r N_NAME N_PID N_HOST N_PORT N_PROVIDER N_MODEL N_PROJECT; do
+        [[ -n "$N_NAME" ]] || continue
+        printf '  %-14s pid=%-7s port=%-6s %s / %s\n' "$N_NAME" "$N_PID" "$N_PORT" "$N_PROVIDER" "$N_MODEL" >&2
+      done <<< "$RUNNING_LIST"
+    fi
     echo "Geçerli seçenekler: $(echo "$PROVIDERS" | tr '\n' ' ')" >&2
+    echo "Yeni proxy başlatmak için: bin/proxy-run <provider> <model>" >&2
     exit 1
   fi
 fi
@@ -1046,15 +1319,12 @@ case "${CLIENT:-none}" in
     print_summary
     echo
     echo "Claude Code başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop${INSTANCE_NAME:+ $INSTANCE_NAME}"
-    export DEFAULT_PROVIDER="$PROVIDER"
-    # Takma adları (haiku/sonnet/opus/alt ajan) seçilen modele yönlendir (NVIDIA NIM kılavuzu).
-    CTX_TOKENS="$(node src/context-window.mjs "$PROVIDER" "$MODEL" 2>/dev/null || echo 200000)"
-    apply_claude_env "$ANTHROPIC_BASE" "$TOKEN_ARG" "$MODEL" "$FAST_MODEL" "$CTX_TOKENS"
-    rlog "claude env model=$ANTHROPIC_MODEL haiku=$ANTHROPIC_DEFAULT_HAIKU_MODEL sonnet=$ANTHROPIC_DEFAULT_SONNET_MODEL opus=$ANTHROPIC_DEFAULT_OPUS_MODEL subagent=$CLAUDE_CODE_SUBAGENT_MODEL context=$CLAUDE_CODE_MAX_CONTEXT_TOKENS"
-    cd "$ORIG_PWD"
     rlog "client start claude model=$MODEL fast_model=${FAST_MODEL:-} base_url=$ANTHROPIC_BASE"
-    rc=0; claude || rc=$?
-    rlog "client exit claude code=$rc"
+    rc=0; run_claude_client "$ANTHROPIC_BASE" "$MODEL" "$FAST_MODEL" || rc=$?
+    # İstemciden çıkıldı ama proxy ayakta: aynı örneğe dönmek için tek komut.
+    echo
+    echo "Claude Code kapandı (kod $rc). Proxy çalışmaya devam ediyor."
+    echo "Tekrar bağlanmak için: bin/proxy-run ${INSTANCE_NAME:-default}"
     exit "$rc"
     ;;
   pi)

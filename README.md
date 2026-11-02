@@ -324,6 +324,8 @@ claude
 | `bin/proxy-run <provider> <model> --client none` | Sadece proxy'yi başlat |
 | `bin/proxy-run <provider> --list` | Sadece modelleri listele |
 | `bin/proxy-run <provider> --filter <metin>` | Model listesini filtrele |
+| `bin/proxy-run <isim>` | Çalışan proxy'ye yeniden bağlan (istemci seçilir) |
+| `bin/proxy-run attach <isim> [--client ...]` | Aynısı; isim bir provider ile çakışıyorsa |
 | `bin/proxy-run --foreground <provider> <model>` | Ön planda çalıştır (Ctrl+C ile dur) |
 | `bin/proxy-run add` | Yeni provider ekleme sihirbazı |
 | `bin/proxy-run remove [provider]` | Provider'ı config'den kaldır (onay ister) |
@@ -357,6 +359,30 @@ bin/proxy-run stop all          # bu kurulumun tüm örneklerini durdur
   Başlıkta `(bu proje)` / `(başka proje)` etiketi bulunur.
 - **Dizin** — sunucunun gerçekten çalıştığı appProxy kurulumu. Proje ile
   aynıysa satır tekrarlanmaz.
+
+### İstemciden Çıkıp Aynı Proxy'ye Dönmek
+
+Proxy arka planda çalışmaya devam ettiği için Claude Code içinde `/exit`
+dedikten sonra yeni bir proxy başlatmak gerekmez. Örnek adıyla dönülür:
+
+```bash
+bin/proxy-run pr3                     # çalışan proxy'ye bağlan, istemciyi seç
+bin/proxy-run pr3 --client claude     # soru sormadan doğrudan Claude Code
+bin/proxy-run attach pr3              # aynısı (isim bir provider adıysa bunu kullanın)
+bin/proxy-run default                 # isimsiz (varsayılan) örneğe bağlan
+```
+
+Bu çağrı **yeni süreç başlatmaz**, provider/model sormaz: port, provider ve
+model `run/` kaydından okunur, `/health` doğrulanır ve yalnızca istemci
+seçilir (`claude` / `pi` / istemci yok). Proxy kapalıysa net bir hata verilir.
+
+Menüyle çalışıyorsanız isim hatırlamak gerekmez: çalışan proxy varken
+`bin/proxy-run` komutunun provider listesinde **`⟳ çalışan proxy'ye bağlan`**
+seçeneği de görünür.
+
+İlk argüman hem bir provider hem bir örnek adıysa provider kazanır (eski
+davranış korunur); örnek adına açıkça bağlanmak için `attach` kullanın.
+`--foreground` ve `--list` bu akışta kullanılamaz.
 
 Aynı appProxy kurulumu birden çok projeden kullanılabildiği için örnekler
 başlatıldıkları projeyle kaydedilir:
