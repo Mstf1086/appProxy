@@ -263,10 +263,17 @@ ve alt ajanları kullanmaya devam eder. Bunlar Anthropic model ID'lerine çözü
 | `ANTHROPIC_MODEL`, `ANTHROPIC_CUSTOM_MODEL_OPTION` | seçilen model (`/model` listesine de eklenir) |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` / `_SONNET_MODEL` / `_OPUS_MODEL` | seçilen model |
 | `CLAUDE_CODE_SUBAGENT_MODEL` | seçilen model |
+| `CLAUDE_CODE_MAX_CONTEXT_TOKENS` | modelin bağlam penceresi (aşağıya bakın) |
 
 Haiku (arka plan) takma adını sağlayıcının `fastModel` değerine yönlendirmek için `APPPROXY_USE_FAST_MODEL=1`
 verin; varsayılan, upstream'de var olduğu kesin olan seçili modeldir. Başka terminalde kullanmak için gereken
 `export` satırlarını `proxy-run` kendisi yazdırır.
+
+**Bağlam penceresi:** Claude Code sağlayıcı model ID'lerini (örn. `minimaxai/minimax-m3.1-flash`) tanımaz ve
+"isn't described by this version's model catalog" uyarısı verip 200k varsayar. `proxy-run` pencereyi açıkça bildirir
+(`src/context-window.mjs`). Öncelik: `APPPROXY_CONTEXT_TOKENS` ortam değişkeni → `config/models.json`'daki preset'in
+`contextWindow` alanı → `config/providers.json`'daki sağlayıcının `contextWindow` alanı → `200000`.
+Modelin gerçek penceresini biliyorsanız örn. `APPPROXY_CONTEXT_TOKENS=1000000 proxy-run` ile verin.
 
 **Ek güvence (fallback):** yine de bir model upstream'de yoksa 404/410 (veya "model" geçen 400/403/422)
 alınır; proxy isteği **bir kez** sağlayıcının `defaultModel`'iyle yeniden dener ve `model.fallback` olayını loga yazar.

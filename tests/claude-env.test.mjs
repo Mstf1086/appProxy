@@ -40,3 +40,8 @@ test('print_claude_env_exports lists alias exports and never prints the key', ()
   }
   assert.match(out, /unset ANTHROPIC_API_KEY/);
 });
+
+test('5th argument sets CLAUDE_CODE_MAX_CONTEXT_TOKENS', () => {
+  assert.equal(run(`apply_claude_env b t m f 256000; echo "$CLAUDE_CODE_MAX_CONTEXT_TOKENS"`), '256000');
+  assert.equal(run(`apply_claude_env b t m f; echo "[\${CLAUDE_CODE_MAX_CONTEXT_TOKENS-unset}]"`), '[unset]');
+});

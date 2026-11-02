@@ -96,7 +96,8 @@ fi
 
 # --- 4. Claude Code ortam değişkenleri -----------------------------------
 export DEFAULT_PROVIDER="$PROVIDER"
-apply_claude_env "${SERVER_URL}/${PROVIDER}" "${PROXY_TOKEN:-appproxy-local-dev}" "${MODEL}" "$FAST_MODEL"
+CTX_TOKENS="$(node src/context-window.mjs "$PROVIDER" "${MODEL}" 2>/dev/null || echo 200000)"
+apply_claude_env "${SERVER_URL}/${PROVIDER}" "${PROXY_TOKEN:-appproxy-local-dev}" "${MODEL}" "$FAST_MODEL" "$CTX_TOKENS"
 
 echo
 echo "=========================================================="

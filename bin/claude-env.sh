@@ -11,11 +11,16 @@
 # Not: ANTHROPIC_API_KEY ayarlanmaz, TEMİZLENİR — proxy kimliği ANTHROPIC_AUTH_TOKEN ile
 # doğrulanır ve ortamdaki gerçek bir Anthropic anahtarı proxy'ye sızmamalıdır.
 #
-# apply_claude_env <base_url> <token> <model> [fast_model]
+# Bağlam penceresi: Claude Code gateway model ID'sini tanımaz ve "isn't described by this
+# version's model catalog" uyarısı verir. CLAUDE_CODE_MAX_CONTEXT_TOKENS pencereyi açıkça
+# belirtir (src/context-window.mjs: APPPROXY_CONTEXT_TOKENS > preset.contextWindow >
+# provider.contextWindow > 200000).
+#
+# apply_claude_env <base_url> <token> <model> [fast_model] [context_tokens]
 #   APPPROXY_USE_FAST_MODEL=1 ise haiku (arka plan) takma adı fast_model'e gider;
 #   varsayılan olarak seçilen modele gider (upstream'de var olduğu kesin olan model).
 apply_claude_env() {
-  local base="$1" token="$2" model="${3:-}" fast="${4:-}"
+  local base="$1" token="$2" model="${3:-}" fast="${4:-}" ctx="${5:-}"
   unset ANTHROPIC_API_KEY
   export ANTHROPIC_BASE_URL="$base"
   export ANTHROPIC_AUTH_TOKEN="$token"
@@ -35,6 +40,9 @@ apply_claude_env() {
   export ANTHROPIC_DEFAULT_OPUS_MODEL="$model"
   export CLAUDE_CODE_SUBAGENT_MODEL="$model"
   export ANTHROPIC_SMALL_FAST_MODEL="$background"   # eski ad; geriye dönük uyumluluk
+  if [[ -n "$ctx" ]]; then
+    export CLAUDE_CODE_MAX_CONTEXT_TOKENS="$ctx"
+  fi
 }
 
 # print_claude_env_exports <base_url> <model> [fast_model] — başka terminalde kullanılacak export satırları
@@ -52,4 +60,8 @@ print_claude_env_exports() {
   echo "  export ANTHROPIC_DEFAULT_SONNET_MODEL=\"$model\""
   echo "  export ANTHROPIC_DEFAULT_OPUS_MODEL=\"$model\""
   echo "  export CLAUDE_CODE_SUBAGENT_MODEL=\"$model\""
+  if [[ -n "${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-}" ]]; then
+    echo "  export CLAUDE_CODE_MAX_CONTEXT_TOKENS=\"$CLAUDE_CODE_MAX_CONTEXT_TOKENS\""
+  fi
+  return 0
 }

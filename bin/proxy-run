@@ -823,8 +823,9 @@ case "${CLIENT:-none}" in
     echo "Claude Code başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop${INSTANCE_NAME:+ $INSTANCE_NAME}"
     export DEFAULT_PROVIDER="$PROVIDER"
     # Takma adları (haiku/sonnet/opus/alt ajan) seçilen modele yönlendir (NVIDIA NIM kılavuzu).
-    apply_claude_env "$ANTHROPIC_BASE" "$TOKEN_ARG" "$MODEL" "$FAST_MODEL"
-    rlog "claude env model=$ANTHROPIC_MODEL haiku=$ANTHROPIC_DEFAULT_HAIKU_MODEL sonnet=$ANTHROPIC_DEFAULT_SONNET_MODEL opus=$ANTHROPIC_DEFAULT_OPUS_MODEL subagent=$CLAUDE_CODE_SUBAGENT_MODEL"
+    CTX_TOKENS="$(node src/context-window.mjs "$PROVIDER" "$MODEL" 2>/dev/null || echo 200000)"
+    apply_claude_env "$ANTHROPIC_BASE" "$TOKEN_ARG" "$MODEL" "$FAST_MODEL" "$CTX_TOKENS"
+    rlog "claude env model=$ANTHROPIC_MODEL haiku=$ANTHROPIC_DEFAULT_HAIKU_MODEL sonnet=$ANTHROPIC_DEFAULT_SONNET_MODEL opus=$ANTHROPIC_DEFAULT_OPUS_MODEL subagent=$CLAUDE_CODE_SUBAGENT_MODEL context=$CLAUDE_CODE_MAX_CONTEXT_TOKENS"
     cd "$ORIG_PWD"
     rlog "client start claude model=$MODEL fast_model=${FAST_MODEL:-} base_url=$ANTHROPIC_BASE"
     rc=0; claude || rc=$?
