@@ -149,10 +149,38 @@ En kolay yol (interaktif seçim):
 bin/proxy-run
 ```
 
-Sağlayıcı → model → istemci (Claude Code / Pi CLI / sadece proxy)
+Sağlayıcı → model → istemci (Cline CLI / Claude Code / Pi CLI / sadece proxy)
 sırasıyla seçilir. İstemci adımında `pi cli` seçilirse Pi Coding Agent
 (https://pi.dev) seçilen provider/model ile başlatılır; Pi doğrudan
 sağlayıcının ucuna bağlanır, proxy arka planda çalışmaya devam eder.
+
+#### Cline CLI ile kullanım
+
+Cline CLI (`npm i -g cline`, v3+) OpenAI uyumlu bir sağlayıcı ile çalışır;
+appProxy onun `openai-compatible` sağlayıcısını proxy'ye yönlendirir:
+
+```bash
+npm i -g cline                       # bir kez
+bin/proxy-run <provider> <model> --client cline
+```
+
+`proxy-run` her oturumda şunları yapar (port/örnek değişebildiği için):
+
+```bash
+cline auth openai-compatible -k "$PROXY_TOKEN" -m "<model>" -b "http://127.0.0.1:8790/<provider>/v1"
+cline -P openai-compatible -m "<model>"
+```
+
+Elle bağlanmak isterseniz aynı iki komut `--client none` çıktısında yazılır.
+Notlar:
+
+- Cline **akış (stream) bekler**; proxy SSE döndürmezse
+  `Response stream ended without a finish reason` hatası verir.
+- Cline yalnızca **proxy token'ını** görür (`~/.cline/settings/providers.json`);
+  gerçek sağlayıcı anahtarı `.env`'de kalır.
+- `cline auth` sağlayıcı ayarını global yazar: iki farklı proxy'yi aynı anda
+  kullanacaksanız her oturumda `proxy-run ... --client cline` ile başlatın
+  (base URL otomatik güncellenir).
 
 #### Pi CLI entegrasyonu nasıl çalışır?
 
@@ -346,12 +374,13 @@ claude
 | `bin/proxy-run` | Interaktif provider + model + istemci seçimi, arka planda başlatma |
 | `bin/proxy-run <provider>` | Provider sabit, model listesi interaktif |
 | `bin/proxy-run <provider> <model>` | Model sabit, istemci interaktif |
+| `bin/proxy-run <provider> <model> --client cline` | Proxy + Cline CLI başlat |
 | `bin/proxy-run <provider> <model> --client claude` | Proxy + Claude Code başlat |
 | `bin/proxy-run <provider> <model> --client pi` | Proxy + Pi CLI (https://pi.dev) başlat |
 | `bin/proxy-run <provider> <model> --client none` | Sadece proxy'yi başlat |
 | `bin/proxy-run <provider> --list` | Sadece modelleri listele |
 | `bin/proxy-run <provider> --filter <metin>` | Model listesini filtrele |
-| `bin/proxy-run <isim>` | Çalışan proxy'ye yeniden bağlan (istemci seçilir) |
+| `bin/proxy-run <isim>` | Çalışan proxy'ye yeniden bağlan (istemci seçilir: cline/claude/pi) |
 | `bin/proxy-run attach <isim> [--client ...]` | Aynısı; isim bir provider ile çakışıyorsa |
 | `bin/proxy-run --foreground <provider> <model>` | Ön planda çalıştır (Ctrl+C ile dur) |
 | `bin/proxy-run add` | Yeni provider ekleme sihirbazı |
@@ -610,6 +639,8 @@ appProxy/
 | Model keşfi başarısız | Upstream kapalı / anahtar hatalı | `npm run models <provider>` ile deneyin, `PROXY_LOG_BODIES=1` ile logları artırın |
 | `There's an issue with the selected model` | Upstream seçilen/hızlı modeli sunmuyor | `tail -n 30 logs/proxy-run.log` içindeki `request.failed` satırına (`status`, `upstreamBody`) bakın; takma adlar `bin/claude-env.sh` ile eşlenir; gerekirse `fastModel`'i değiştirin ([Model Eşlemesi](#-claude-code-model-eşlemesi-ve-fallback)) |
 | `selected model` hatası, log'da `/v1/v1/messages` | `ANTHROPIC_BASE_URL` sonunda fazladan `/v1` var (Claude Code yola `/v1/messages` kendisi ekler) | Taban URL `http://127.0.0.1:8790/<provider>` olmalı (`proxy-run` artık böyle ayarlar; sunucu çift `/v1`'i de tolere eder) |
+| `Response stream ended without a finish reason` (Cline) | Cline akış bekliyor, yanıt SSE değil | `--client cline` kullanın (base URL `.../<provider>/v1` olmalı); proxy'nin `stream:true` isteğini SSE'ye çevirdiğini `PROXY_LOG_BODIES=1` ile doğrulayın |
+| Cline eski proxy'ye bağlanıyor | `cline auth` base URL'i `~/.cline` altında saklar | `bin/proxy-run <provider> <model> --client cline` ile yeniden yapılandırın (`cline auth ... -b` çıktısını kontrol edin) |
 | `ESKİ bir proxy çalışıyor` | Önceki sürüm proxy portu tutuyor | `bin/proxy-run stop all`, sonra yeniden başlatın |
 | `route.unknown` / 404 `not found` | İstemci desteklenmeyen bir yola istek attı | Log'daki `path` değerine bakın, `ANTHROPIC_BASE_URL`'in `/<provider>` ile bittiğini doğrulayın |
 | `proxy-run: command not found` | Alias yüklenmedi | `source ~/.bashrc` veya `install.sh`'i yeniden çalıştırın |

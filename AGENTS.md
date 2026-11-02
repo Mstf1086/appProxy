@@ -50,6 +50,7 @@ node src/cli.mjs doctor       # sağlayıcı + anahtar özeti
 node src/cli.mjs urls <prov>  # anthropic/openai taban URL'leri
 bin/proxy-run status          # çalışan örnekler + proje/dizin bilgisi
 bin/proxy-run stop            # yalnızca bu projeden başlatılanları durdurur
+bin/proxy-run <p> <m> --client cline   # proxy + Cline CLI (openai-compatible)
 bin/proxy-run <isim>          # çalışan proxy'ye yeniden bağlan (yeni süreç yok)
 bin/proxy-run attach <isim>   # aynısı; isim provider adıyla çakışıyorsa
 ```
@@ -78,7 +79,13 @@ Bunlar testle korunuyor; değiştireceksen **önce** testi güncelle:
    başlatıldığı dizini taşır; `stop` yalnızca eşleşenleri durdurur. Bu alanı
    `list_running_instances` çıktısından (7. kolon) düşürürsen diğer projelerin
    proxy'leri de ölür (`tests/proxy-run-project.test.mjs`).
-9. **`proxy-run <isim>` yeni süreç başlatmaz.** İlk argüman provider değil de
+9. **Cline istemcisi `openai-compatible` sağlayıcısını kullanır.** `cline auth
+   openai-compatible -k <token> -m <model> -b <...>/<provider>/v1` base URL'i
+   `~/.cline` altına yazar; port/örnek değiştiği için her oturumda yeniden
+   çağrılır. Cline akış bekler: yanıt SSE değilse
+   `Response stream ended without a finish reason` hatası verir
+   (`tests/proxy-run-cline.test.mjs`).
+10. **`proxy-run <isim>` yeni süreç başlatmaz.** İlk argüman provider değil de
    çalışan bir örnek adıysa yalnızca istemci bağlanır: port/provider/model
    `run/` kaydından okunur, `/health` doğrulanır, `run/` dosyalarına yazılmaz.
    Provider adı çakışırsa provider kazanır; açık bağlanma `attach` iledir

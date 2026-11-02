@@ -174,5 +174,5 @@ test('istemci seçimi terminal yokken --client ister', { skip }, async (t) => {
   const res = runProxyRun(appRoot, projectA, ['pr3']);
   assert.equal(res.status, 1);
   assert.match(res.stderr, /terminal gerekli/);
-  assert.match(res.stderr, /--client claude\|pi\|none/);
+  assert.match(res.stderr, /--client cline\|claude\|pi\|none/);
 });
