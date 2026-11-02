@@ -62,7 +62,11 @@ function authorized(req) {
 
 function readBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
-    let raw = '';
+    // Collect raw Buffers and decode ONCE at the end. Decoding each TCP chunk on
+    // its own (raw += chunk) corrupts any multi-byte character that straddles a
+    // chunk boundary: both halves become U+FFFD, silently mangling prompts that
+    // contain Turkish/Chinese/emoji characters.
+    const chunks = [];
     let size = 0;
     let settled = false;
     const fail = (error) => {
@@ -78,12 +82,12 @@ function readBody(req, maxBytes) {
         req.destroy();
         return;
       }
-      raw += chunk;
+      chunks.push(chunk);
     });
     req.on('end', () => {
       if (settled) return;
       settled = true;
-      resolve(raw);
+      resolve(Buffer.concat(chunks).toString('utf8'));
     });
     req.on('error', (error) => fail(error));
   });
