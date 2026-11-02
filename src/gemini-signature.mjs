@@ -5,7 +5,7 @@
  * (docs/gemini/openai-compatibility.md → "thought signatures in chat completion
  * APIs"). The upstream rejects the NEXT request with 400 ("Function call is
  * missing a thought_signature in functionCall parts") when the signature is
- * dropped. Clients like Cline's openai-compatible provider strip unknown
+ * dropped. OpenAI-compatible clients strip unknown
  * fields such as `extra_content` when they echo tool calls back, so the proxy
  * captures signatures from upstream responses and re-injects them into the
  * tool calls of subsequent requests, keyed by tool-call id.

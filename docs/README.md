@@ -40,7 +40,6 @@ Her dosyanın başında şu satırlar bulunur:
 | OpenRouter Anthropic Messages API (proxy'nin passthrough hedefi) | `openrouter/anthropic-messages-create-a-message.md` |
 | OpenRouter resmî Claude Code kurulumu (env değişkenleri) | `openrouter/claude-code-integration.md`, `openrouter/anthropic-agent-sdk.md` |
 | OpenRouter sağlayıcı seçimi/öncelik | `openrouter/provider-selection.md` |
-| Cline'ın Anthropic / Gemini / OpenRouter / OpenAI-uyumlu sağlayıcı ayarları | `cline/provider-*.md` |
 
 ## Notlar
 

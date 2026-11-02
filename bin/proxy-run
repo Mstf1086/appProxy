@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # proxy-run — provider seç, provider'ın TÜM modellerini listele, model seç,
-# istemci (Cline / Claude Code) seç ve seçime göre başlat.
+# istemci (Claude Code / Pi CLI) seç ve seçime göre başlat.
 #
 # Kullanım:
 #   proxy-run                              # interaktif: provider -> model -> istemci
 #   proxy-run <provider>                   # provider sabit, model + istemci interaktif
 #   proxy-run <provider> <model>           # model sabit, istemci interaktif
-#   proxy-run <provider> <model> --client cline   # soru sormadan Cline'ı başlat
 #   proxy-run <provider> <model> --client claude  # soru sormadan Claude Code'u başlat
 #   proxy-run <provider> <model> --client none   # sadece proxy'yi başlat
 #   proxy-run <provider> <model> --client pi     # proxy + Pi CLI'ı (https://pi.dev) başlat
@@ -64,7 +63,6 @@ Kullanım:
   proxy-run                                     interaktif provider + model + istemci seçimi
   proxy-run <provider>                          provider sabit, model + istemci interaktif
   proxy-run <provider> <model>                  model sabit, istemci interaktif
-  proxy-run <provider> <model> --client cline   proxy + Cline CLI'ı başlat
   proxy-run <provider> <model> --client claude  proxy + Claude Code'u başlat
   proxy-run <provider> <model> --client none   sadece proxy'yi başlat
   proxy-run <provider> --list                   sadece modelleri listele
@@ -85,7 +83,7 @@ akış yeni provider ile devam eder (model listesi -> istemci seçimi -> başlat
     açılır (örnekler: proxy-run status / proxy-run stop <isim> / stop all).
 
 Seçenekler:
-  -c, --client <cline|claude|pi|none>  Model seçiminden sonra başlatılacak istemci
+  -c, --client <claude|pi|none>        Model seçiminden sonra başlatılacak istemci
   -f, --foreground                     Ön planda çalıştır (istemci seçimi yapılmaz)
   -l, --list                           Model listesini yazdır ve çık
       --filter <metin>                 Model listesini büyük/küçük harf duyarsız filtrele
@@ -477,9 +475,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "${CLIENT:-}" in
-  ""|cline|claude|pi|none) ;;
+  ""|claude|pi|none) ;;
   *)
-    echo "HATA: --client yalnızca cline, claude, pi veya none olabilir (aldım: $CLIENT)" >&2
+    echo "HATA: --client yalnızca claude, pi veya none olabilir (aldım: $CLIENT)" >&2
     exit 1
     ;;
 esac
@@ -725,11 +723,10 @@ ANTHROPIC_BASE="${SERVER_URL}/${PROVIDER}"
 if [[ "$FOREGROUND" != "1" && -z "${CLIENT:-}" ]]; then
   echo
   echo "İstemci seçimi:"
-  select CLIENT_WORD in cline claude "pi cli (https://pi.dev)" "sadece proxy"; do
+  select CLIENT_WORD in claude "pi cli (https://pi.dev)" "sadece proxy"; do
     [[ -n "$CLIENT_WORD" ]] && break
   done
   case "${CLIENT_WORD:-}" in
-    cline)   CLIENT="cline" ;;
     claude)  CLIENT="claude" ;;
     pi*)     CLIENT="pi" ;;
     *)       CLIENT="none" ;;
@@ -741,7 +738,7 @@ if [[ "$FOREGROUND" != "1" && -z "${CLIENT:-}" ]]; then
 fi
 
 # Anahtarı olmayan bir provider ile istemci başlatmak yalnızca hata üretir:
-# her istek upstream'ten 401 döner ve cline/claude hiçbir komut çalıştıramaz.
+# her istek upstream'ten 401 döner ve Claude Code hiçbir komut çalıştıramaz.
 # Bu yüzden istemci seçiminden sonra anahtar kontrolü sert bir hataya dönüşür.
 if [[ "$FOREGROUND" != "1" && "${CLIENT:-none}" != "none" && "$KEY_SET" != "yes" ]]; then
   echo "HATA: $PROVIDER için API anahtarı boş — $CLIENT başlatılmadı." >&2
@@ -750,10 +747,6 @@ if [[ "$FOREGROUND" != "1" && "${CLIENT:-none}" != "none" && "$KEY_SET" != "yes"
   exit 1
 fi
 
-if [[ "$CLIENT" == "cline" ]] && ! command -v cline >/dev/null 2>&1; then
-  echo "UYARI: 'cline' bulunamadı; sadece proxy başlatılacak." >&2
-  CLIENT="none"
-fi
 if [[ "$CLIENT" == "claude" ]] && ! command -v claude >/dev/null 2>&1; then
   echo "UYARI: 'claude' bulunamadı; sadece proxy başlatılacak." >&2
   CLIENT="none"
@@ -788,11 +781,6 @@ print_summary() {
 
 print_instructions() {
   print_summary
-  echo
-  echo "Cline CLI (openai-compatible):"
-  echo '  export PROXY_TOKEN="$(grep -E "^PROXY_TOKEN=" .env | cut -d= -f2-)"'
-  echo "  cline auth openai-compatible -k \"\$PROXY_TOKEN\" -m \"$MODEL\" -b \"$OPENAI_BASE\""
-  echo "  cline -P openai-compatible -m \"$MODEL\" \"...\""
   echo
   echo "Claude Code (anthropic):"
   print_claude_env_exports "$ANTHROPIC_BASE" "$MODEL" "$FAST_MODEL"
@@ -889,19 +877,6 @@ if [[ -z "$HEALTH_JSON" ]]; then
 fi
 
 case "${CLIENT:-none}" in
-  cline)
-    print_summary
-    echo
-    echo "Cline yapılandırılıyor ve başlatılıyor..."
-    cline auth openai-compatible -k "$TOKEN_ARG" -m "$MODEL" -b "$OPENAI_BASE"
-    echo
-    echo "Cline başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop${INSTANCE_NAME:+ $INSTANCE_NAME}"
-    cd "$ORIG_PWD"
-    rlog "client start cline model=$MODEL"
-    rc=0; cline -P openai-compatible -m "$MODEL" || rc=$?
-    rlog "client exit cline code=$rc"
-    exit "$rc"
-    ;;
   claude)
     print_summary
     echo

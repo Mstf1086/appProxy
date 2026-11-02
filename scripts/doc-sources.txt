@@ -1,7 +1,7 @@
 # appProxy — resmî doküman kaynak listesi
 # Biçim: <kind>|<url>|<docs/ altındaki hedef yol>
 # kind: md (markdown), txt (düz metin), html (HTML -> metne çevrilir), json (ham JSON)
-# Yalnızca birinci elden resmî kaynaklar (Anthropic, Google, NVIDIA, OpenRouter, Cline).
+# Yalnızca birinci elden resmî kaynaklar (Anthropic, Google, NVIDIA, OpenRouter).
 #
 # ---- Anthropic · Claude Code (gateway sözleşmesi, env değişkenleri, model ayarları) ----
 md|https://code.claude.com/docs/en/llm-gateway-protocol.md|anthropic/claude-code/llm-gateway-protocol.md
@@ -43,9 +43,3 @@ md|https://openrouter.ai/docs/guides/community/anthropic-agent-sdk.md|openrouter
 md|https://openrouter.ai/docs/guides/routing/provider-selection.md|openrouter/provider-selection.md
 txt|https://openrouter.ai/docs/llms.txt|openrouter/llms.txt
 json|https://openrouter.ai/openapi.json|openrouter/openapi.json
-# ---- Cline (aynı proxy'yi kullanabilecek istemcinin resmî sağlayıcı ayarları) ----
-txt|https://docs.cline.bot/llms.txt|cline/llms.txt
-md|https://docs.cline.bot/provider-config/anthropic.md|cline/provider-anthropic.md
-md|https://docs.cline.bot/provider-config/google-gemini.md|cline/provider-google-gemini.md
-md|https://docs.cline.bot/provider-config/openrouter.md|cline/provider-openrouter.md
-md|https://docs.cline.bot/provider-config/openai-compatible.md|cline/provider-openai-compatible.md

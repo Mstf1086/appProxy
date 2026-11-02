@@ -1,7 +1,7 @@
 /**
  * OpenAI-compatible ingress (Chat Completions + Models).
  *
- * Cline CLI's "openai-compatible" provider speaks this protocol. The proxy
+ * OpenAI-compatible clients speak this protocol. The proxy
  * forwards the request to the provider's own OpenAI-compatible endpoint:
  *  - kind: openai      -> {baseUrl}/chat/completions
  *  - kind: anthropic   -> {baseUrl}/v1/chat/completions (OpenRouter, NIM)

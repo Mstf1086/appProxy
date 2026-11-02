@@ -44,8 +44,3 @@ Projede **yalnızca resmî dokümanlar** referans alınır.
 | 200 | 65178 | `openrouter/provider-selection.md` | https://openrouter.ai/docs/guides/routing/provider-selection.md |
 | 200 | 97487 | `openrouter/llms.txt` | https://openrouter.ai/docs/llms.txt |
 | 200 | 2556733 | `openrouter/openapi.json` | https://openrouter.ai/openapi.json |
-| 200 | 19656 | `cline/llms.txt` | https://docs.cline.bot/llms.txt |
-| 200 | 5238 | `cline/provider-anthropic.md` | https://docs.cline.bot/provider-config/anthropic.md |
-| 200 | 1847 | `cline/provider-google-gemini.md` | https://docs.cline.bot/provider-config/google-gemini.md |
-| 200 | 2876 | `cline/provider-openrouter.md` | https://docs.cline.bot/provider-config/openrouter.md |
-| 200 | 4462 | `cline/provider-openai-compatible.md` | https://docs.cline.bot/provider-config/openai-compatible.md |

@@ -1,13 +1,13 @@
 # appProxy
 
-**Claude Code ve Cline CLI için sıfır bağımlılıklı yerel LLM proxy.** Tek Node.js
+**Claude Code için sıfır bağımlılıklı yerel LLM proxy.** Tek Node.js
 sunucu, arkasında **Gemini / OpenRouter / NVIDIA (NIM) / Cohere / OpenAI-uyumlu**
 sağlayıcılar; öne iki uyumlu API sunar:
 
 | Endpoint | Yol | Uyumlu istemci |
 | --- | --- | --- |
-| OpenAI Chat Completions | `POST /<provider>/v1/chat/completions` | **Cline CLI (`openai-compatible`)**, herhangi bir OpenAI SDK |
-| OpenAI model listesi | `GET /<provider>/v1/models` | Cline CLI, OpenAI SDK |
+| OpenAI Chat Completions | `POST /<provider>/v1/chat/completions` | Herhangi bir OpenAI SDK / OpenAI-uyumlu istemci |
+| OpenAI model listesi | `GET /<provider>/v1/models` | OpenAI SDK |
 | Anthropic Messages | `POST /<provider>/v1/messages` | **Claude Code**, Anthropic SDK |
 
 Her sağlayıcı kendi doğal API dilinde kullanılır (tool calling + streaming aynen
@@ -16,7 +16,7 @@ signature yönetimini üstlenir. Sağlayıcı anahtarları yalnızca `.env`'de k
 istemciye asla gönderilmez.
 
 - 🔗 Git: [github.com/Mstf1086/appProxy](https://github.com/Mstf1086/appProxy)
-- 📚 Ayrıntılı kullanım: [`CLINE.md`](./CLINE.md) · Doküman aynası: [`docs/`](./docs/)
+- 📚 Kullanım kılavuzu: [`docs/`](./docs/) · Ajan kuralları: [`AGENTS.md`](./AGENTS.md)
 - ⚙️ Node.js >= 20, npm bağımlılığı YOK (yalnızca standart kütüphane)
 
 ---
@@ -113,7 +113,7 @@ NIM_API_KEY=not-used
 # Yerel proxy sunucusu
 PROXY_HOST=127.0.0.1            # varsayılan: sadece loopback
 PROXY_PORT=8790
-PROXY_TOKEN=appproxy-local-dev  # Claude Code/Cline'ın proxy'ye bağlanması için kimlik
+PROXY_TOKEN=appproxy-local-dev  # Claude Code'un proxy'ye bağlanması için kimlik
 
 # Varsayılan sağlayıcı
 DEFAULT_PROVIDER=openrouter
@@ -149,7 +149,7 @@ En kolay yol (interaktif seçim):
 bin/proxy-run
 ```
 
-Sağlayıcı → model → istemci (Cline / Claude Code / Pi CLI / sadece proxy)
+Sağlayıcı → model → istemci (Claude Code / Pi CLI / sadece proxy)
 sırasıyla seçilir. İstemci adımında `pi cli` seçilirse Pi Coding Agent
 (https://pi.dev) seçilen provider/model ile başlatılır; Pi doğrudan
 sağlayıcının ucuna bağlanır, proxy arka planda çalışmaya devam eder.
@@ -309,17 +309,6 @@ export ANTHROPIC_MODEL="gemini-pro"
 claude
 ```
 
-### Cline CLI ile kullanım
-
-```bash
-export PROXY_TOKEN="$(grep -E '^PROXY_TOKEN=' .env | cut -d= -f2-)"
-cline auth openai-compatible -k "$PROXY_TOKEN" -m "gemini-pro" \
-  -b "http://127.0.0.1:8790/gemini/v1"
-cline -P openai-compatible -m "gemini-pro" "Merhaba"
-```
-
----
-
 ## 🚀 Kullanım
 
 ### proxy-run Komutları
@@ -329,7 +318,6 @@ cline -P openai-compatible -m "gemini-pro" "Merhaba"
 | `bin/proxy-run` | Interaktif provider + model + istemci seçimi, arka planda başlatma |
 | `bin/proxy-run <provider>` | Provider sabit, model listesi interaktif |
 | `bin/proxy-run <provider> <model>` | Model sabit, istemci interaktif |
-| `bin/proxy-run <provider> <model> --client cline` | Proxy + Cline CLI başlat |
 | `bin/proxy-run <provider> <model> --client claude` | Proxy + Claude Code başlat |
 | `bin/proxy-run <provider> <model> --client pi` | Proxy + Pi CLI (https://pi.dev) başlat |
 | `bin/proxy-run <provider> <model> --client none` | Sadece proxy'yi başlat |
@@ -387,7 +375,7 @@ npm test           # tüm testler
 Çalışan proxy üzerinden erişim:
 
 - Anthropic (Claude Code): `http://127.0.0.1:8790/<provider>/v1/messages`
-- OpenAI (Cline SDK): `http://127.0.0.1:8790/<provider>/v1/chat/completions`
+- OpenAI (SDK / OpenAI-uyumlu istemciler): `http://127.0.0.1:8790/<provider>/v1/chat/completions`
 - Model listesi: `http://127.0.0.1:8790/<provider>/v1/models`
 
 `<provider>` ∈ `gemini`, `nvidia`, `openrouter`, `cohere`, `refuseless` +
@@ -459,16 +447,7 @@ export ANTHROPIC_MODEL="openai/gpt-4o"   # config/models.json eşlemelerine gör
 claude
 ```
 
-### 4. Cline CLI ile Bağlan
-
-```bash
-cline auth openai-compatible \
-  -k "$PROXY_TOKEN" \
-  -m "openai/gpt-4o" \
-  -b "http://127.0.0.1:8790/openrouter/v1"
-```
-
-### 5. Doğrulama
+### 4. Doğrulama
 
 ```bash
 # Sunucu başlangıç mesajı: "appProxy listening on http://127.0.0.1:8790 (default=openrouter)"
@@ -477,7 +456,7 @@ curl -s -H "X-Api-Key: $PROXY_TOKEN" \
   -d '{"model":"gpt-4o","messages":[{"role":"user","content":"test"}]}'
 ```
 
-### 6. Sunucuyu Durdurma
+### 5. Sunucuyu Durdurma
 
 ```bash
 bin/proxy-run stop            # varsayılan (isimsiz) örneği durdur
@@ -506,7 +485,7 @@ gidiş-dönüşü, model eşleme, model fallback, log yazımı, sihirbazlar.
 appProxy/
 ├── bin/                # wrapper betikleri (proxy-run, claude-gemini, ...)
 ├── config/             # providers.json + models.json
-├── docs/               # resmî doküman aynası (Anthropic, Google, NVIDIA, OpenRouter, Cline)
+├── docs/               # resmî doküman aynası (Anthropic, Google, NVIDIA, OpenRouter)
 ├── logs/               # proxy logları (git'e gitmez)
 ├── run/                # runtime dosyaları (pid, port, host, model, provider; isimli örnekler run/instances/ altında) (git'e gitmez)
 ├── scripts/            # fetch-docs.sh, html_to_text.py
@@ -551,7 +530,7 @@ appProxy/
 
 | Hata | Olası neden | Çözüm |
 | --- | --- | --- |
-| `command not found: claude` / `cline` | İstemci araçları yüklü değil | Claude Code / Cline CLI'yı ayrıca kurun |
+| `command not found: claude` | Claude Code yüklü değil | Claude Code'u ayrıca kurun |
 | Node sürüm hatası | Node < 20 | Node 20+ yükleyin |
 | `401 Unauthorized` | Anahtar boş veya yanlış | `.env`'yi kontrol edin, `npm run doctor` ile özet alın |
 | Port çakışması | 8790 zaten kullanımda | `PROXY_PORT` ile farklı port deneyin |

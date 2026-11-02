@@ -3,7 +3,7 @@
 # appProxy — resmî dokümanları yerel docs/ ağacına indirir.
 #
 # Kural (proje sahibinin talebi): yalnızca BİRİNCİ EL / RESMÎ kaynaklar kullanılır
-# (Anthropic, Google Gemini, NVIDIA, OpenRouter, Cline). Üçüncü taraf blog/forum
+# (Anthropic, Google Gemini, NVIDIA, OpenRouter). Üçüncü taraf blog/forum
 # referans alınmaz. Betik idempotenttir: tekrar çalıştırmak dosyaları günceller ve
 # docs/SOURCES.md manifestini yeniden üretir.
 #
