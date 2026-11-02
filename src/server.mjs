@@ -171,6 +171,23 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
 
+  // Log every inbound HTTP request/response (health checks are skipped: noise).
+  if (!(req.method === 'GET' && (pathname === '/health' || pathname === '/healthz'))) {
+    const startedAt = Date.now();
+    log.info('http.request', {
+      method: req.method,
+      path: pathname,
+      ua: req.headers['user-agent'],
+      length: req.headers['content-length'],
+    });
+    res.on('finish', () =>
+      log.info('http.response', { method: req.method, path: pathname, status: res.statusCode, ms: Date.now() - startedAt }),
+    );
+    res.on('close', () => {
+      if (!res.writableFinished) log.warn('http.aborted', { method: req.method, path: pathname, status: res.statusCode });
+    });
+  }
+
   if (req.method === 'GET' && (pathname === '/health' || pathname === '/healthz')) {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: true, defaultProvider, providers: Object.keys(cfg.providers) }));
@@ -196,6 +213,7 @@ const server = http.createServer(async (req, res) => {
 
   const route = parseRoute(req.url);
   if (!route) {
+    log.warn('route.unknown', { method: req.method, path: pathname });
     sendAnthropicError(res, 404, 'not found');
     return;
   }
@@ -301,6 +319,8 @@ const server = http.createServer(async (req, res) => {
       model: prepared.meta.model,
       requestedModel: prepared.meta.requestedModel,
       stream: prepared.meta.stream,
+      messages: body.messages?.length,
+      tools: body.tools?.length,
     });
 
     try {
@@ -317,6 +337,8 @@ const server = http.createServer(async (req, res) => {
         status: e.status,
         protocol: 'openai',
         provider: route.provider,
+        model: ctx.request.model,
+        upstreamBody: typeof e.body === 'string' ? e.body.slice(0, 800) : undefined,
       });
       if (!res.headersSent) sendOpenAiError(res, e.status || 502, e.message, { headers: e.headers || {} });
       else res.end();
@@ -352,6 +374,8 @@ const server = http.createServer(async (req, res) => {
     model: meta.model,
     requestedModel: meta.requestedModel,
     stream: Boolean(request.stream),
+    messages: body.messages?.length,
+    tools: body.tools?.length,
   });
 
   try {
@@ -368,13 +392,16 @@ const server = http.createServer(async (req, res) => {
         { ...retryOpts, model: ctx.request.model }
       )
     );
-    log.info('request.done', { protocol: 'anthropic', provider: route.provider, model: meta.model });
+    log.info('request.done', { protocol: 'anthropic', provider: route.provider, model: ctx.request.model, usage: meta.usage });
   } catch (e) {
     log.error('request.failed', {
       message: e.message,
       status: e.status,
       protocol: 'anthropic',
       provider: route.provider,
+      model: ctx.request.model,
+      requestedModel: meta.requestedModel,
+      upstreamBody: typeof e.body === 'string' ? e.body.slice(0, 800) : undefined,
     });
     if (!res.headersSent) sendAnthropicError(res, e.status || 502, e.message, e.headers || {});
     else res.end();

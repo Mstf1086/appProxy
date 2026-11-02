@@ -30,6 +30,7 @@ export async function handleOpenAiProvider(ctx) {
     ...anthropicAuthHeaders(ctx.apiKey, { providerCfg }),
   };
 
+  log.info('upstream.request', { provider: providerCfg.name, url, model: request.model, stream: wantsStream });
   const response = await upstreamFetch(url, {
     headers,
     body: JSON.stringify(body),
@@ -37,6 +38,7 @@ export async function handleOpenAiProvider(ctx) {
     signal,
   });
 
+  log.info('upstream.response', { provider: providerCfg.name, status: response.status, model: request.model });
   if (!response.ok) {
     const json = await readJsonLoose(response);
     const message =

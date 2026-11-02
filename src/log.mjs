@@ -24,12 +24,47 @@ export function redactHeaders(headers = {}) {
   return out;
 }
 
-export function createLogger({ dir, root, bodies = false, echo = true }) {
+function fmtValue(value) {
+  if (value === undefined) return null;
+  let text = typeof value === 'string' ? value : JSON.stringify(value);
+  if (text === undefined) return null;
+  text = text.replace(/\s+/g, ' ');
+  if (text.length > 600) text = `${text.slice(0, 600)}…`;
+  return /[\s="]/.test(text) ? JSON.stringify(text) : text;
+}
+
+/** One plain-text line: `ts LEVEL event key=value ...` (for the .log file). */
+export function formatTextLine(record) {
+  const { ts, level, event, ...fields } = record;
+  const parts = [];
+  for (const [key, value] of Object.entries(fields)) {
+    const v = fmtValue(value);
+    if (v !== null) parts.push(`${key}=${v}`);
+  }
+  return `${ts} ${level.toUpperCase().padEnd(5)} ${event}${parts.length ? ` ${parts.join(' ')}` : ''}`;
+}
+
+export function createLogger({ dir, root, bodies = false, echo = true, textFile = process.env.PROXY_LOG_FILE }) {
   const logDir = path.isAbsolute(dir) ? dir : path.join(root, dir);
   fs.mkdirSync(logDir, { recursive: true });
 
   let stream = null;
   let streamDay = null;
+
+  // Optional plain-text log (PROXY_LOG_FILE): every event, one line each.
+  let textPath = null;
+  if (textFile) {
+    textPath = path.isAbsolute(textFile) ? textFile : path.join(root, textFile);
+    fs.mkdirSync(path.dirname(textPath), { recursive: true });
+  }
+  function writeText(record) {
+    if (!textPath) return;
+    try {
+      fs.appendFileSync(textPath, `${formatTextLine(record)}\n`);
+    } catch {
+      /* logging must never crash the proxy */
+    }
+  }
 
   const today = () => new Date().toISOString().slice(0, 10);
 
@@ -48,10 +83,12 @@ export function createLogger({ dir, root, bodies = false, echo = true }) {
     // stderr keeps stdout free for CLI output (echo=false: only the file).
     if (echo) process.stderr.write(`${line}\n`);
     fileStream().write(`${line}\n`);
+    writeText(record);
   }
 
   return {
     dir: logDir,
+    textPath,
     info: (event, fields) => write('info', event, fields),
     warn: (event, fields) => write('warn', event, fields),
     error: (event, fields) => write('error', event, fields),

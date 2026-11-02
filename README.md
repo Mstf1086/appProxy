@@ -192,6 +192,13 @@ npm run doctor         # anahtar/endpoint özeti (anahtarlar maskelenir)
 
 ---
 
+## Log dosyası
+
+`proxy-run` çalıştığı sürece her işlem `logs/proxy-run.log` dosyasına satır satır yazılır
+(isimli örneklerde `logs/proxy-run-<isim>.log`): gelen HTTP istekleri ve yanıt kodları, seçilen model,
+upstream isteği/yanıtı, hatalar (upstream gövdesiyle), model fallback ve istemci başlangıç/çıkışı.
+Prompt içerikleri ve anahtarlar yazılmaz. Canlı izlemek için: `tail -f ~/appProxy/logs/proxy-run.log`
+
 ## ✨ İlk Kurulum (Sıfırdan Başlama)
 
 Türkiye'de bir geliştirici için adım adım örnek (Gemini üzerinden):

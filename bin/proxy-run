@@ -39,8 +39,13 @@ MODEL_FILE="$RUN_DIR/proxy-run.model"
 HOST_FILE="$RUN_DIR/proxy-run.host"
 PORT_FILE="$RUN_DIR/proxy-run.port"
 OUT_FILE="logs/proxy-run.out"
+LOG_FILE="logs/proxy-run.log"   # okunabilir olay günlüğü (sunucu + proxy-run adımları)
 INSTANCES_DIR="$RUN_DIR/instances"
 mkdir -p "$RUN_DIR" "$INSTANCES_DIR" logs
+
+rlog() {  # proxy-run adımlarını .log dosyasına yaz
+  printf '%s INFO  proxy-run %s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "$*" >> "$LOG_FILE" 2>/dev/null || true
+}
 
 node_cfg() {
   node --input-type=module -e "$1"
@@ -711,7 +716,9 @@ print_instructions() {
   echo
 }
 
+export PROXY_LOG_FILE="$LOG_FILE"
 if [[ "$FOREGROUND" == "1" ]]; then
+  rlog "foreground start provider=$PROVIDER model=$MODEL port=$EFFECTIVE_PORT"
   print_instructions
   echo "Proxy ön planda başlıyor (Ctrl+C ile durdur)..."
   exec node src/server.mjs "$PROVIDER"
@@ -722,8 +729,11 @@ if [[ -n "$INSTANCE_NAME" ]]; then
   INST_DIR="$INSTANCES_DIR/$INSTANCE_NAME"
   mkdir -p "$INST_DIR"
   OUT_FILE="logs/proxy-run-$INSTANCE_NAME.out"
+  LOG_FILE="logs/proxy-run-$INSTANCE_NAME.log"
+  export PROXY_LOG_FILE="$LOG_FILE"
 fi
 export PROXY_PORT="$EFFECTIVE_PORT"
+rlog "session start provider=$PROVIDER model=$MODEL fast_model=${FAST_MODEL:-} client=${CLIENT:-none} port=$EFFECTIVE_PORT instance=${INSTANCE_NAME:-default}"
 
 : > "$OUT_FILE"
 # setsid: proxy, kendisini başlatan terminal kapanınca SIGHUP ile ölmesin
@@ -756,6 +766,7 @@ cleanup_failed_start() {
   fi
 }
 
+rlog "proxy started pid=$PID log=$LOG_FILE out=$OUT_FILE"
 echo "Proxy başlatıldı (pid $PID${INSTANCE_NAME:+, isim: $INSTANCE_NAME}, port: $EFFECTIVE_PORT). Sağlık kontrolü..."
 for _ in {1..50}; do
   if curl -sf "${SERVER_URL}/health" >/dev/null 2>&1; then
@@ -785,7 +796,10 @@ case "${CLIENT:-none}" in
     echo
     echo "Cline başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop${INSTANCE_NAME:+ $INSTANCE_NAME}"
     cd "$ORIG_PWD"
-    exec cline -P openai-compatible -m "$MODEL"
+    rlog "client start cline model=$MODEL"
+    rc=0; cline -P openai-compatible -m "$MODEL" || rc=$?
+    rlog "client exit cline code=$rc"
+    exit "$rc"
     ;;
   claude)
     print_summary
@@ -797,7 +811,10 @@ case "${CLIENT:-none}" in
     export ANTHROPIC_MODEL="$MODEL"
     [[ -n "$FAST_MODEL" ]] && export ANTHROPIC_SMALL_FAST_MODEL="$FAST_MODEL"
     cd "$ORIG_PWD"
-    exec claude
+    rlog "client start claude model=$MODEL fast_model=${FAST_MODEL:-} base_url=$ANTHROPIC_BASE"
+    rc=0; claude || rc=$?
+    rlog "client exit claude code=$rc"
+    exit "$rc"
     ;;
   pi)
     print_summary
@@ -806,6 +823,7 @@ case "${CLIENT:-none}" in
     # Kurulum + doğrulama + başlatma tek noktadan: src/providers/pi.mjs.
     # Pi'nin yerleşik desteklemediği sağlayıcılar için ~/.pi/agent/models.json'a
     # otomatik özel provider tanımı yazılır; anahtar .env'den Pi'ye aktarılır.
+    rlog "client start pi model=$MODEL"
     if ! node src/providers/pi.mjs "$PROVIDER" "$MODEL" "$ORIG_PWD"; then
       echo "UYARI: Pi CLI başlatılamadı; proxy arkada çalışıyor. Durum: bin/proxy-run status" >&2
     fi

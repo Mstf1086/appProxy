@@ -105,6 +105,7 @@ export async function handleOpenAiCompatible(ctx) {
     'user-agent': 'appProxy/0.1',
   };
 
+  log.info('upstream.request', { provider: providerCfg.name, url, model: request.model, stream: wantsStream });
   const response = await upstreamFetch(url, {
     headers,
     body: JSON.stringify(request),
@@ -113,6 +114,7 @@ export async function handleOpenAiCompatible(ctx) {
   });
 
   const retryHeaders = { ...retryHeadersFrom(response.headers), ...rateLimitHeadersFrom(response.headers) };
+  log.info('upstream.response', { provider: providerCfg.name, status: response.status, model: request.model });
 
   if (!response.ok) {
     const text = await readBodyText(response);
