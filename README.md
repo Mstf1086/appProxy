@@ -202,8 +202,9 @@ Pi'nin her istekte ayırdığı 4096 tokenlık güvenlik payı nedeniyle 8K cont
 uzun araç konuşmalarında `max_tokens=1`e düşebiliyordu; 32K context bu durumu
 giderir.
 
-Proxy çalışırken durdurmak: `bin/proxy-run stop` (isimli örnek için
-`bin/proxy-run stop <isim>`, tümü için `bin/proxy-run stop all`). Durum:
+Proxy çalışırken durdurmak: `bin/proxy-run stop` — yalnızca bu projeden
+başlatılan proxy'leri durdurur (isimli örnek için `bin/proxy-run stop <isim>`,
+bu kurulumdaki her şey için `bin/proxy-run stop all`). Durum:
 `bin/proxy-run status`.
 
 ### Adım 6 — Test Edin
@@ -327,8 +328,10 @@ claude
 | `bin/proxy-run add` | Yeni provider ekleme sihirbazı |
 | `bin/proxy-run remove [provider]` | Provider'ı config'den kaldır (onay ister) |
 | `bin/proxy-run models [provider]` | Modelleri listele (proxy çalışmasa da olur) |
-| `bin/proxy-run status` | Çalışan proxy örneklerinin durumu |
-| `bin/proxy-run stop [isim\|all]` | Varsayılan / isimli / tüm örnekleri durdur |
+| `bin/proxy-run status` | Çalışan proxy'ler; her biri için proje ve dizin bilgisi |
+| `bin/proxy-run stop` | Yalnızca bu projeden başlatılan proxy'leri durdur |
+| `bin/proxy-run stop <isim> [--force]` | Tek örneği durdur (başka projedense `--force` gerekir) |
+| `bin/proxy-run stop all` | Bu kurulumun izlediği tüm örnekleri durdur |
 
 ### Aynı Anda Birden Çok Proxy (İsimli Örnekler)
 
@@ -342,16 +345,32 @@ kapatılıp kapatılmayacağı sorulur:
 İsimli örnekler `run/instances/<isim>/` altında izlenir:
 
 ```bash
-bin/proxy-run status            # varsayılan + isimli örnekler birlikte listelenir
+bin/proxy-run status            # tüm örnekler, proje bilgisiyle listelenir
+bin/proxy-run stop              # yalnızca bu projeden başlatılanları durdur
 bin/proxy-run stop proxy2       # sadece 'proxy2' örneğini durdur
-bin/proxy-run stop all           # tüm örnekleri durdur
+bin/proxy-run stop all          # bu kurulumun tüm örneklerini durdur
 ```
 
-`status` her örnek için **Dizin** satırını da yazar: proxy'nin hangi repo
-kökünden (kurulumdan) başlatıldığı. Birden çok checkout varsa "neden eski
-davranıyor" sorusunun cevabı genelde orada olur. Bu kurulumun `run/` kaydında
-olmayan, başka bir dizinden başlatılmış proxy'ler de `[izlenmeyen]` etiketiyle
-listelenir.
+`status` her örnek için iki satır yazar:
+
+- **Proje** — `proxy-run`'ın çağrıldığı dizin (ör. `/data/home/appNews`).
+  Başlıkta `(bu proje)` / `(başka proje)` etiketi bulunur.
+- **Dizin** — sunucunun gerçekten çalıştığı appProxy kurulumu. Proje ile
+  aynıysa satır tekrarlanmaz.
+
+Aynı appProxy kurulumu birden çok projeden kullanılabildiği için örnekler
+başlatıldıkları projeyle kaydedilir:
+
+| Komut | Etki |
+| --- | --- |
+| `stop` | Yalnızca **bu projenin** proxy'leri durur; diğer projelerinki çalışmaya devam eder |
+| `stop <isim>` | Yalnızca o örnek; başka projeye aitse `--force` olmadan reddeder |
+| `stop all` | Bu kurulumun izlediği **tüm** örnekler (proje ayrımı yok) |
+
+Eski sürümle başlatılmış (proje kaydı olmayan) örnekler `stop` ile
+durdurulmaz; `stop <isim>` ile tek tek durdurulabilir. Bu kurulumun `run/`
+kaydında olmayan, başka bir dizinden başlatılmış proxy'ler de `[izlenmeyen]`
+etiketiyle listelenir.
 
 İsimli örneğe `--port` ile açık port da verilebilir:
 `bin/proxy-run <provider> <model> --port 8899` (çalışan proxy varken
@@ -459,10 +478,10 @@ curl -s -H "X-Api-Key: $PROXY_TOKEN" \
 ### 5. Sunucuyu Durdurma
 
 ```bash
-bin/proxy-run stop            # varsayılan (isimsiz) örneği durdur
-bin/proxy-run stop <isim>     # isimli örneği durdur
-bin/proxy-run stop all        # tüm örnekleri durdur
-# veya tüm süreçleri elle bitirirken:
+bin/proxy-run stop            # bu projeden başlatılan tüm proxy'ler
+bin/proxy-run stop <isim>     # isimli örnek (başka projedense --force)
+bin/proxy-run stop all        # bu kurulumun tüm örnekleri
+# veya tüm süreçleri elle bitirirken (diğer projeler dahil):
 pkill -f "node src/server.mjs"
 ```
 

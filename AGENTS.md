@@ -48,7 +48,8 @@ npm test                      # node --test tests/*.test.mjs (yaklaşık 2,5 sn)
 node --test tests/x.test.mjs  # tek dosya
 node src/cli.mjs doctor       # sağlayıcı + anahtar özeti
 node src/cli.mjs urls <prov>  # anthropic/openai taban URL'leri
-bin/proxy-run status          # çalışan örnekler + hangi dizinden çalıştığı
+bin/proxy-run status          # çalışan örnekler + proje/dizin bilgisi
+bin/proxy-run stop            # yalnızca bu projeden başlatılanları durdurur
 ```
 
 ## Bozulmaması gereken sözleşmeler
@@ -71,6 +72,10 @@ Bunlar testle korunuyor; değiştireceksen **önce** testi güncelle:
    kırpılır (`summarizeErrorMessage`).
 7. **Model eşlemesi `config/models.json` üzerinden** yapılır; istemcinin gönderdiği
    ad (`claude-sonnet-*` gibi) upstream'e olduğu gibi gitmez.
+8. **`proxy-run stop` proje kapsamlıdır.** Her örnek `run/.../project` alanında
+   başlatıldığı dizini taşır; `stop` yalnızca eşleşenleri durdurur. Bu alanı
+   `list_running_instances` çıktısından (7. kolon) düşürürsen diğer projelerin
+   proxy'leri de ölür (`tests/proxy-run-project.test.mjs`).
 
 ## Kod kuralları
 

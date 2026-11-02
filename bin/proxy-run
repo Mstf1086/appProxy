@@ -12,8 +12,10 @@
 #   proxy-run <provider> --list            # sadece modelleri listele
 #   proxy-run <provider> --filter kimi     # model listesini filtrele
 #   proxy-run --foreground <provider> <model>
-#   proxy-run status                          # çalışan proxy örneklerini listele
-#   proxy-run stop [isim|all]                 # varsayılan / isimli / tümünü durdur
+#   proxy-run status                          # çalışan proxy'leri proje bilgisiyle listele
+#   proxy-run stop                            # bu projeden başlatılanları durdur
+#   proxy-run stop <isim> [--force]           # tek örnek (başka projedense --force)
+#   proxy-run stop all                        # bu kurulumun tüm örnekleri
 #   proxy-run models [provider]
 #
 # OpenAI-uyumlu endpoint: http://127.0.0.1:8790/<provider>/v1/chat/completions
@@ -26,6 +28,9 @@
 # kapatılıp kapatılmayacağı sorulur: "açık kalsın" seçilirse yeni proxy'ye bir
 # isim verilir ve boş bir portta açılır (run/instances/<isim>/ ile izlenir;
 # durdurmak için: proxy-run stop <isim> ya da proxy-run stop all).
+#
+# Her örnek başlatıldığı proje diziniyle kaydedilir: `proxy-run stop` yalnızca
+# bu projenin proxy'lerini durdurur, başka projelerinki etkilenmez.
 set -euo pipefail
 
 ORIG_PWD="$PWD"
@@ -37,10 +42,17 @@ PROVIDER_FILE="$RUN_DIR/proxy-run.provider"
 MODEL_FILE="$RUN_DIR/proxy-run.model"
 HOST_FILE="$RUN_DIR/proxy-run.host"
 PORT_FILE="$RUN_DIR/proxy-run.port"
+PROJECT_FILE="$RUN_DIR/proxy-run.project"  # proxy-run hangi dizinden çağrıldı
 OUT_FILE="logs/proxy-run.out"
 ROOT_DIR="$(pwd)"                          # betik repo köküne cd ettikten sonra
 LOG_FILE="$ROOT_DIR/logs/proxy-run.log"    # okunabilir olay günlüğü (mutlak yol: istemci cd etse de bozulmaz)
 INSTANCES_DIR="$RUN_DIR/instances"
+
+# "Proje" = proxy-run'ın çağrıldığı dizin (ORIG_PWD), repo kökü DEĞİL.
+# Birden çok proje aynı appProxy kurulumunu paylaşabildiği için süreç dizini
+# her zaman repo kökünü gösterir; örnekleri birbirinden ayıran bilgi budur.
+# `stop` varsayılan olarak yalnızca bu dizinden başlatılanları durdurur.
+PROJECT_DIR="$(cd "$ORIG_PWD" 2>/dev/null && pwd -P || printf '%s' "$ORIG_PWD")"
 mkdir -p "$RUN_DIR" "$INSTANCES_DIR" logs
 
 # shellcheck source=bin/claude-env.sh
@@ -71,11 +83,22 @@ Kullanım:
   proxy-run add                                  yeni provider ekleme sihirbazı
   proxy-run remove [provider]                     provider'ı config'den kaldır (onay ister)
   proxy-run models [provider]                   modelleri listele (proxy başlatmadan)
-  proxy-run status                              çalışan proxy örneklerini listele
-  proxy-run stop [isim|all]                      varsayılan / isimli / tüm örnekleri durdur
+  proxy-run status                              çalışan proxy'leri proje bilgisiyle listele
+  proxy-run stop                                bu projeden başlatılan proxy'leri durdur
+  proxy-run stop <isim> [--force]               yalnızca o örneği durdur
+  proxy-run stop all                            bu kurulumun izlediği tüm örnekleri durdur
 
 Provider menüsünde "+ yeni provider ekle" seçeneği de vardır; sihirbaz bitince
 akış yeni provider ile devam eder (model listesi -> istemci seçimi -> başlat).
+
+"Proje" = proxy-run'ın çağrıldığı dizin (repo kökü değil). Aynı appProxy
+kurulumu birden çok projeden kullanılabildiği için her örnek, başlatıldığı
+proje diziniyle birlikte kaydedilir:
+  - `proxy-run stop` yalnızca bu projenin proxy'lerini durdurur; diğer
+    projelerin proxy'leri çalışmaya devam eder,
+  - `proxy-run stop <isim>` başka bir projeye aitse --force olmadan reddeder,
+  - `proxy-run stop all` bu kurulumun izlediği tüm örnekleri durdurur.
+`proxy-run status` her örnek için Proje ve Dizin satırlarını yazar.
 
 Çalışan bir proxy varken yeni bir proxy-run başlatıldığında:
   - "Kapat" seçilirse önceki örnek(ler) durur ve aynı port yeniden kullanılır,
@@ -104,10 +127,23 @@ USAGE
 # örnekler run/instances/<isim>/ altında aynı alanları (pid, provider, model,
 # host, port) tutar. Böylece birden çok proxy yan yana çalışabilir.
 
+# Komut satırı gerçekten appProxy sunucusu mu? Yalnızca "src/server.mjs" geçmesi
+# yetmez: `grep src/server.mjs`, editör ya da kabuk komutu da eşleşir ve
+# status'ta hayalet "[izlenmeyen]" satırları üretir. İlk token node olmalı.
+# $1: boşlukla ayrılmış komut satırı
+cmdline_is_proxy() {
+  local cmd="${1:-}" first
+  [[ -n "$cmd" ]] || return 1
+  first="${cmd%% *}"
+  [[ "$(basename "$first")" == node* ]] || return 1
+  [[ "$cmd" == *"src/server.mjs"* ]]
+}
+
 is_proxy_pid() {
   [[ -n "${1:-}" ]] || return 1
   kill -0 "$1" 2>/dev/null || return 1
-  [[ -r "/proc/$1/cmdline" ]] && tr '\0' ' ' < "/proc/$1/cmdline" | grep -q 'src/server.mjs'
+  [[ -r "/proc/$1/cmdline" ]] || return 1
+  cmdline_is_proxy "$(tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null || true)"
 }
 
 kill_pid() {
@@ -119,14 +155,35 @@ kill_pid() {
   kill -9 "$1" 2>/dev/null || true
 }
 
-# Çalışan örnekleri listeler. Her satır: isim \t pid \t host \t port \t provider \t model
+# Varsayılan (isimsiz) örneğin kayıt dosyaları.
+clear_default_files() {
+  rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE" "$PROJECT_FILE"
+}
+
+# Bir örneğin başlatıldığı proje dizini. Eski kayıtlarda alan yoktur; boş
+# dönerse çağıran taraf "bilinmiyor" olarak gösterir.
+# $1: örnek ismi ("" = varsayılan)
+instance_project() {
+  local name="${1:-}" file val=""
+  if [[ -n "$name" ]]; then
+    file="$INSTANCES_DIR/$name/project"
+  else
+    file="$PROJECT_FILE"
+  fi
+  [[ -f "$file" ]] && val="$(cat "$file" 2>/dev/null || true)"
+  printf '%s' "$val"
+}
+
+# Çalışan örnekleri listeler. Her satır:
+#   isim \t pid \t host \t port \t provider \t model \t proje
+# proje = proxy-run'ın çağrıldığı dizin ("" = eski kayıt, bilinmiyor).
 # Ölü pid kayıtları temizlenir. Boş çıktı = çalışan örnek yok.
 list_running_instances() {
-  local name pid host port provider model out=""
+  local name pid host port provider model project out=""
   pid="$(cat "$PID_FILE" 2>/dev/null || true)"
   if [[ -n "$pid" ]]; then
     if ! kill -0 "$pid" 2>/dev/null; then
-      rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"
+      clear_default_files
     elif ! is_proxy_pid "$pid"; then
       echo "UYARI: $PID_FILE'deki pid $pid appProxy (src/server.mjs) değil; yok sayıldı." >&2
     else
@@ -134,7 +191,8 @@ list_running_instances() {
       port="$(cat "$PORT_FILE" 2>/dev/null || echo '?')"
       provider="$(cat "$PROVIDER_FILE" 2>/dev/null || echo '?')"
       model="$(cat "$MODEL_FILE" 2>/dev/null || echo '?')"
-      out+="default"$'\t'"$pid"$'\t'"$host"$'\t'"$port"$'\t'"$provider"$'\t'"$model"$'\n'
+      project="$(instance_project "")"
+      out+="default"$'\t'"$pid"$'\t'"$host"$'\t'"$port"$'\t'"$provider"$'\t'"$model"$'\t'"$project"$'\n'
     fi
   fi
   local dir
@@ -154,19 +212,23 @@ list_running_instances() {
     port="$(cat "$dir/port" 2>/dev/null || echo '?')"
     provider="$(cat "$dir/provider" 2>/dev/null || echo '?')"
     model="$(cat "$dir/model" 2>/dev/null || echo '?')"
-    out+="$name"$'\t'"$pid"$'\t'"$host"$'\t'"$port"$'\t'"$provider"$'\t'"$model"$'\n'
+    project="$(instance_project "$name")"
+    out+="$name"$'\t'"$pid"$'\t'"$host"$'\t'"$port"$'\t'"$provider"$'\t'"$model"$'\t'"$project"$'\n'
   done
   printf '%s' "$out"
 }
 
-stop_instance() {  # $1: örnek ismi (boşsa varsayılan isimsiz örnek)
-  local name="${1:-}" pid_file pid_dir pid
+# $1: örnek ismi ("" = varsayılan), $2: "1" ise proje korumasını atla
+stop_instance() {
+  local name="${1:-}" force="${2:-0}" pid_file pid_dir pid project label
   if [[ -n "$name" ]]; then
     pid_file="$INSTANCES_DIR/$name/pid"
     pid_dir="$INSTANCES_DIR/$name"
+    label="$name"
   else
     pid_file="$PID_FILE"
     pid_dir=""
+    label="default (isimsiz)"
   fi
   if [[ ! -f "$pid_file" ]]; then
     if [[ -n "$name" ]]; then
@@ -179,32 +241,70 @@ stop_instance() {  # $1: örnek ismi (boşsa varsayılan isimsiz örnek)
   pid="$(cat "$pid_file" 2>/dev/null || true)"
   if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
     echo "PID ${pid:-?} çalışmıyor; dosyalar temizlendi."
-    if [[ -n "$pid_dir" ]]; then rm -rf "$pid_dir"; else rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"; fi
+    if [[ -n "$pid_dir" ]]; then rm -rf "$pid_dir"; else clear_default_files; fi
     return 0
   fi
   if ! is_proxy_pid "$pid"; then
     echo "PID $pid appProxy (src/server.mjs) değil; dokunulmadı." >&2
     return 1
   fi
+  # Proje koruması: başka bir projeden başlatılan proxy'yi yanlışlıkla
+  # durdurmak, o projenin Claude Code oturumunu ortada bırakır.
+  project="$(instance_project "$name")"
+  if [[ "$force" != "1" && -n "$project" && "$project" != "$PROJECT_DIR" ]]; then
+    echo "HATA: '$label' başka bir projeden başlatılmış: $project" >&2
+    echo "      Bu proje: $PROJECT_DIR" >&2
+    echo "      Yine de durdurmak için: bin/proxy-run stop ${name:-default} --force" >&2
+    return 1
+  fi
   kill_pid "$pid"
-  if [[ -n "$pid_dir" ]]; then rm -rf "$pid_dir"; else rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"; fi
-  echo "Proxy durduruldu (pid $pid${name:+, isim: $name})."
+  if [[ -n "$pid_dir" ]]; then rm -rf "$pid_dir"; else clear_default_files; fi
+  echo "Proxy durduruldu (pid $pid, isim: $label)."
   return 0
 }
 
-stop_all_instances() {
-  local stopped=0 name pid rest
-  while IFS=$'\t' read -r name pid rest; do
+# Örnekleri toplu durdurur.
+#   $1=project → yalnızca bu projeden (PROJECT_DIR) başlatılanlar
+#   $1=all     → bu kurulumun izlediği tüm örnekler (proje ayrımı yok)
+stop_instances() {
+  local scope="${1:-project}" stopped=0 skipped=0 unknown=0
+  local name pid host port provider model project
+  while IFS=$'\t' read -r name pid host port provider model project; do
     [[ -n "$name" ]] || continue
-    if [[ "$name" == "default" ]]; then
-      stop_instance ""
-    else
-      stop_instance "$name"
+    if [[ "$scope" != "all" ]]; then
+      if [[ -z "$project" ]]; then
+        # Eski kayıt (proje alanı yok): hangi projeye ait olduğu bilinmiyor,
+        # yanlışlıkla başka projenin proxy'sini öldürmemek için dokunulmaz.
+        unknown=$((unknown + 1))
+        continue
+      fi
+      if [[ "$project" != "$PROJECT_DIR" ]]; then
+        skipped=$((skipped + 1))
+        continue
+      fi
     fi
-    stopped=1
+    if [[ "$name" == "default" ]]; then
+      stop_instance "" 1
+    else
+      stop_instance "$name" 1
+    fi
+    stopped=$((stopped + 1))
   done < <(list_running_instances)
-  if [[ "$stopped" == "0" ]]; then
-    echo "Çalışan proxy yok."
+  if [[ "$stopped" -eq 0 ]]; then
+    if [[ "$skipped" -gt 0 || "$unknown" -gt 0 ]]; then
+      echo "Bu projeden ($PROJECT_DIR) başlatılmış çalışan proxy yok."
+    else
+      echo "Çalışan proxy yok."
+    fi
+  fi
+  if [[ "$skipped" -gt 0 ]]; then
+    echo "Not: başka projelerden başlatılmış $skipped proxy'ye dokunulmadı."
+    echo "     Hepsini görmek için: bin/proxy-run status"
+    echo "     Hepsini durdurmak için: bin/proxy-run stop all"
+  fi
+  if [[ "$unknown" -gt 0 ]]; then
+    echo "Not: $unknown proxy'nin proje kaydı yok (eski sürümle başlatılmış)."
+    echo "     Tek tek durdurmak için: bin/proxy-run stop <isim>"
   fi
   return 0
 }
@@ -268,7 +368,7 @@ process_is_proxy() {
   elif command -v ps >/dev/null 2>&1; then
     cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
   fi
-  [[ "$cmd" == *src/server.mjs* ]]
+  cmdline_is_proxy "$cmd"
 }
 
 # Bu kurulumun run/ kaydında olmayan appProxy süreçleri (başka bir checkout'tan
@@ -280,12 +380,12 @@ untracked_proxy_pids() {
       pid="${pid#/proc/}"
       [[ "$tracked" == *" $pid "* ]] && continue
       cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
-      [[ "$cmd" == *src/server.mjs* ]] && printf '%s\n' "$pid"
+      cmdline_is_proxy "$cmd" && printf '%s\n' "$pid"
     done
   elif command -v ps >/dev/null 2>&1; then
     ps -axo pid=,command= 2>/dev/null | while read -r pid cmd; do
       [[ "$tracked" == *" $pid "* ]] && continue
-      [[ "$cmd" == *src/server.mjs* ]] && printf '%s\n' "$pid"
+      cmdline_is_proxy "$cmd" && printf '%s\n' "$pid"
     done
   fi
   return 0
@@ -294,10 +394,10 @@ untracked_proxy_pids() {
 status_proxy() {
   local running
   running="$(list_running_instances)"
-  local name pid host port provider model label health pdir tracked="" shown=0
+  local name pid host port provider model project label health pdir tracked="" shown=0 scope
   if [[ -n "$running" ]]; then
     echo "Çalışan proxy örnekleri:"
-    while IFS=$'\t' read -r name pid host port provider model; do
+    while IFS=$'\t' read -r name pid host port provider model project; do
       [[ -n "$name" ]] || continue
       label="$name"
       [[ "$name" == "default" ]] && label="default (isimsiz)"
@@ -306,13 +406,27 @@ status_proxy() {
       pdir="$(process_cwd "$pid")"
       tracked+=" $pid"
       shown=1
-      echo "  [$label] pid $pid"
-      # Hangi kurulumdan (repo kökünden) başlatıldığı: birden çok checkout varsa
-      # "neden eski davranıyor" sorusunun cevabı genelde buradadır.
-      if [[ -n "$pdir" && "$pdir" != "$ROOT_DIR" ]]; then
-        echo "    Dizin    : $pdir (bu betik: $ROOT_DIR)"
+      # Hangi projeden başlatıldığı başlıkta görünsün: `stop` yalnızca
+      # "bu proje" olanları durdurur, karışıklık buradan çıkıyordu.
+      scope=""
+      if [[ -n "$project" && "$project" == "$PROJECT_DIR" ]]; then
+        scope="  (bu proje)"
+      elif [[ -n "$project" ]]; then
+        scope="  (başka proje)"
+      fi
+      echo "  [$label] pid $pid$scope"
+      # Proje: proxy-run'ın çağrıldığı dizin (süreç dizini değil).
+      if [[ -n "$project" ]]; then
+        echo "    Proje    : $project"
       else
-        echo "    Dizin    : ${pdir:-bilinmiyor}"
+        echo "    Proje    : bilinmiyor (eski kayıt; bu sürümle yeniden başlatın)"
+      fi
+      # Dizin: sunucunun gerçekten çalıştığı appProxy kurulumu. Projeyle aynıysa
+      # tekrar yazmanın anlamı yok.
+      if [[ -n "$pdir" && "$pdir" != "$project" ]]; then
+        echo "    Dizin    : $pdir"
+      elif [[ -z "$pdir" ]]; then
+        echo "    Dizin    : bilinmiyor"
       fi
       echo "    Provider : $provider"
       echo "    Model    : $model"
@@ -339,6 +453,8 @@ status_proxy() {
       shown=1
     fi
     echo "  [izlenmeyen] pid $orphan"
+    # Kayıt olmadığı için proje bilinemez; süreç dizini tek ipucu.
+    echo "    Proje    : bilinmiyor (kayıt yok)"
     echo "    Dizin    : $(process_cwd "$orphan")"
     echo "    Not      : başka bir appProxy kurulumundan başlatılmış; durdurmak için: kill $orphan"
   done
@@ -353,18 +469,43 @@ status_proxy() {
 case "${1:-}" in
   stop)
     shift
-    case "${1:-}" in
-      ""|default)
-        stop_instance ""
+    STOP_TARGET=""
+    STOP_FORCE=0
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -h|--help)
+          echo "Kullanım: bin/proxy-run stop [isim|all] [--force]"
+          echo "  (isimsiz) bu projeden başlatılan tüm proxy'leri durdurur"
+          echo "  all       bu kurulumun izlediği tüm proxy'leri durdurur (proje ayrımı yok)"
+          echo "  isim      yalnızca o örneği durdurur; başka projedense --force gerekir"
+          exit 0
+          ;;
+        --force|-f)
+          STOP_FORCE=1
+          ;;
+        -*)
+          echo "Bilinmeyen seçenek: $1" >&2
+          exit 1
+          ;;
+        *)
+          STOP_TARGET="$1"
+          ;;
+      esac
+      shift
+    done
+    case "$STOP_TARGET" in
+      "")
+        # Varsayılan: yalnızca bu proje. Başka projelerin proxy'leri çalışmaya devam eder.
+        stop_instances project
+        ;;
+      default)
+        stop_instance "" "$STOP_FORCE"
         ;;
       all|--all)
-        stop_all_instances
-        ;;
-      -h|--help)
-        echo "Kullanım: bin/proxy-run stop [isim|all]"
+        stop_instances all
         ;;
       *)
-        stop_instance "$1"
+        stop_instance "$STOP_TARGET" "$STOP_FORCE"
         ;;
     esac
     exit $?
@@ -642,18 +783,24 @@ if [[ "$FOREGROUND" != "1" ]]; then
   if [[ -n "$RUNNING_INSTANCES" ]]; then
     echo
     echo "Çalışan proxy örnekleri:"
-    while IFS=$'\t' read -r R_NAME R_PID R_HOST R_PORT R_PROVIDER R_MODEL; do
+    while IFS=$'\t' read -r R_NAME R_PID R_HOST R_PORT R_PROVIDER R_MODEL R_PROJECT; do
       [[ -n "$R_NAME" ]] || continue
       R_LABEL="$R_NAME"
       [[ "$R_NAME" == "default" ]] && R_LABEL="(isimsiz varsayılan)"
       [[ "$R_HOST" == "0.0.0.0" || "$R_HOST" == "::" ]] && R_HOST="127.0.0.1"
-      printf '  %-22s pid=%-7s http://%s:%-6s %-14s %s\n' \
-        "$R_LABEL" "$R_PID" "$R_HOST" "$R_PORT" "$R_PROVIDER" "$R_MODEL"
+      R_SCOPE=""
+      [[ "$R_PROJECT" == "$PROJECT_DIR" ]] && R_SCOPE=" [bu proje]"
+      printf '  %-22s pid=%-7s http://%s:%-6s %-14s %s%s\n' \
+        "$R_LABEL" "$R_PID" "$R_HOST" "$R_PORT" "$R_PROVIDER" "$R_MODEL" "$R_SCOPE"
+      if [[ -n "$R_PROJECT" && "$R_PROJECT" != "$PROJECT_DIR" ]]; then
+        printf '  %-22s proje: %s\n' "" "$R_PROJECT"
+      fi
     done <<< "$RUNNING_INSTANCES"
 
     if [[ ! -t 0 ]]; then
       echo "HATA: çalışan proxy var; terminalden seçim yapılamıyor (stdin terminal değil)." >&2
-      echo "  Öncekileri kapatmak için: bin/proxy-run stop all" >&2
+      echo "  Bu projenin proxy'lerini kapatmak için: bin/proxy-run stop" >&2
+      echo "  Tüm projelerinkini kapatmak için      : bin/proxy-run stop all" >&2
       echo "  Yan yana çalıştırmak için: bin/proxy-run <provider> <model> --port <port> --client none" >&2
       exit 1
     fi
@@ -661,7 +808,7 @@ if [[ "$FOREGROUND" != "1" ]]; then
     echo
     echo "Yeni bir proxy başlatılacak. Önceki proxy ne yapılsın?"
     select DECISION_WORD in \
-      "Kapat: öncekileri durdur, aynı portta başlat" \
+      "Kapat: bu projenin önceki proxy'lerini durdur, aynı portta başlat" \
       "Açık kalsın: yeni proxy'ye isim ver, başka portta aç" \
       "İptal"; do
       [[ -n "$DECISION_WORD" ]] && break
@@ -672,8 +819,22 @@ if [[ "$FOREGROUND" != "1" ]]; then
     fi
     case "$DECISION_WORD" in
       Kapat*)
-        echo "Önceki proxy örnekleri durduruluyor..."
-        stop_all_instances
+        echo "Bu projenin önceki proxy örnekleri durduruluyor..."
+        # Yalnızca bu proje: başka projelerin proxy'leri çalışmaya devam eder.
+        stop_instances project
+        # Başka bir proje aynı portu tutuyorsa yeni süreç EADDRINUSE ile ölür;
+        # sessizce başarısız olmak yerine boş bir porta geç.
+        if port_busy "$EFFECTIVE_PORT"; then
+          if [[ "$PORT_EXPLICIT" == "1" ]]; then
+            echo "HATA: --port $EFFECTIVE_PORT başka bir projenin proxy'si tarafından kullanılıyor." >&2
+            echo "      Boş bir port belirtin ya da: bin/proxy-run stop all" >&2
+            exit 1
+          fi
+          if NEXT_PORT="$(find_free_port "$EFFECTIVE_PORT")"; then
+            echo "UYARI: $EFFECTIVE_PORT başka bir projenin proxy'sinde; port $NEXT_PORT kullanılacak." >&2
+            EFFECTIVE_PORT="$NEXT_PORT"
+          fi
+        fi
         ;;
       Açık*)
         NAME_SUGGEST="$(suggest_instance_name)"
@@ -822,25 +983,29 @@ else
   nohup node src/server.mjs "$PROVIDER" >> "$OUT_FILE" 2>&1 < /dev/null &
 fi
 PID=$!
+# project: bu proxy'yi hangi proje dizininden başlattığımız. `stop` ve `status`
+# bu alanı kullanır; süreç dizini (ROOT_DIR) her zaman repo köküdür, proje değil.
 if [[ -n "$INST_DIR" ]]; then
   echo "$PID" > "$INST_DIR/pid"
   echo "$PROVIDER" > "$INST_DIR/provider"
   echo "$MODEL" > "$INST_DIR/model"
   echo "$CFG_HOST" > "$INST_DIR/host"
   echo "$EFFECTIVE_PORT" > "$INST_DIR/port"
+  printf '%s\n' "$PROJECT_DIR" > "$INST_DIR/project"
 else
   echo "$PID" > "$PID_FILE"
   echo "$PROVIDER" > "$PROVIDER_FILE"
   echo "$MODEL" > "$MODEL_FILE"
   echo "$CFG_HOST" > "$HOST_FILE"
   echo "$EFFECTIVE_PORT" > "$PORT_FILE"
+  printf '%s\n' "$PROJECT_DIR" > "$PROJECT_FILE"
 fi
 
 cleanup_failed_start() {
   if [[ -n "$INST_DIR" ]]; then
     rm -rf "$INST_DIR"
   else
-    rm -f "$PID_FILE" "$PROVIDER_FILE" "$MODEL_FILE" "$HOST_FILE" "$PORT_FILE"
+    clear_default_files
   fi
 }
 
