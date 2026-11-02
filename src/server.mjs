@@ -9,6 +9,7 @@ import { handleOpenAiProvider } from './providers/openai.mjs';
 import { handleGeminiProvider } from './providers/gemini.mjs';
 import { handleCohereProvider } from './providers/cohere.mjs';
 import { runWithRateLimitRetry } from './rate-limit.mjs';
+import { withModelFallback } from './model-fallback.mjs';
 import {
   handleCohereCompatible,
   handleOpenAiCompatible,
@@ -303,9 +304,11 @@ const server = http.createServer(async (req, res) => {
     });
 
     try {
-      await runWithRateLimitRetry(
-        () => (providerCfg.kind === 'cohere' ? handleCohereCompatible(ctx) : handleOpenAiCompatible(ctx)),
-        { ...retryOpts, model: prepared.meta.model }
+      await withModelFallback(ctx, () =>
+        runWithRateLimitRetry(
+          () => (providerCfg.kind === 'cohere' ? handleCohereCompatible(ctx) : handleOpenAiCompatible(ctx)),
+          { ...retryOpts, model: ctx.request.model }
+        )
       );
       log.info('request.done', { protocol: 'openai', provider: route.provider, model: prepared.meta.model });
     } catch (e) {
@@ -354,14 +357,16 @@ const server = http.createServer(async (req, res) => {
   try {
     const useOpenAi = providerCfg.kind === 'openai';
     const useGemini = providerCfg.kind === 'gemini';
-    await runWithRateLimitRetry(
-      () => {
-        if (useGemini) return handleGeminiProvider(ctx);
-        if (providerCfg.kind === 'cohere') return handleCohereProvider(ctx);
-        if (useOpenAi) return handleOpenAiProvider(ctx);
-        return handleAnthropicProvider(ctx);
-      },
-      { ...retryOpts, model: meta.model }
+    await withModelFallback(ctx, () =>
+      runWithRateLimitRetry(
+        () => {
+          if (useGemini) return handleGeminiProvider(ctx);
+          if (providerCfg.kind === 'cohere') return handleCohereProvider(ctx);
+          if (useOpenAi) return handleOpenAiProvider(ctx);
+          return handleAnthropicProvider(ctx);
+        },
+        { ...retryOpts, model: ctx.request.model }
+      )
     );
     log.info('request.done', { protocol: 'anthropic', provider: route.provider, model: meta.model });
   } catch (e) {
