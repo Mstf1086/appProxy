@@ -43,6 +43,9 @@ LOG_FILE="logs/proxy-run.log"   # okunabilir olay günlüğü (sunucu + proxy-ru
 INSTANCES_DIR="$RUN_DIR/instances"
 mkdir -p "$RUN_DIR" "$INSTANCES_DIR" logs
 
+# shellcheck source=bin/claude-env.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/claude-env.sh"
+
 rlog() {  # proxy-run adımlarını .log dosyasına yaz
   printf '%s INFO  proxy-run %s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "$*" >> "$LOG_FILE" 2>/dev/null || true
 }
@@ -703,9 +706,7 @@ print_instructions() {
   echo "  cline -P openai-compatible -m \"$MODEL\" \"...\""
   echo
   echo "Claude Code (anthropic):"
-  echo "  export ANTHROPIC_BASE_URL=\"$ANTHROPIC_BASE\""
-  echo '  export ANTHROPIC_AUTH_TOKEN="$PROXY_TOKEN"'
-  echo "  export ANTHROPIC_MODEL=\"$MODEL\""
+  print_claude_env_exports "$ANTHROPIC_BASE" "$MODEL" "$FAST_MODEL"
   echo
   if [[ -n "${INSTANCE_NAME:-}" ]]; then
     echo "Durdurmak için : bin/proxy-run stop $INSTANCE_NAME"
@@ -806,10 +807,9 @@ case "${CLIENT:-none}" in
     echo
     echo "Claude Code başlıyor (çıkmak için /exit). Proxy arkada çalışıyor; durdurmak için: bin/proxy-run stop${INSTANCE_NAME:+ $INSTANCE_NAME}"
     export DEFAULT_PROVIDER="$PROVIDER"
-    export ANTHROPIC_BASE_URL="$ANTHROPIC_BASE"
-    export ANTHROPIC_AUTH_TOKEN="$TOKEN_ARG"
-    export ANTHROPIC_MODEL="$MODEL"
-    [[ -n "$FAST_MODEL" ]] && export ANTHROPIC_SMALL_FAST_MODEL="$FAST_MODEL"
+    # Takma adları (haiku/sonnet/opus/alt ajan) seçilen modele yönlendir (NVIDIA NIM kılavuzu).
+    apply_claude_env "$ANTHROPIC_BASE" "$TOKEN_ARG" "$MODEL" "$FAST_MODEL"
+    rlog "claude env model=$ANTHROPIC_MODEL haiku=$ANTHROPIC_DEFAULT_HAIKU_MODEL sonnet=$ANTHROPIC_DEFAULT_SONNET_MODEL opus=$ANTHROPIC_DEFAULT_OPUS_MODEL subagent=$CLAUDE_CODE_SUBAGENT_MODEL"
     cd "$ORIG_PWD"
     rlog "client start claude model=$MODEL fast_model=${FAST_MODEL:-} base_url=$ANTHROPIC_BASE"
     rc=0; claude || rc=$?

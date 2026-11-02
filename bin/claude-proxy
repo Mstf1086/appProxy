@@ -11,6 +11,7 @@
 # script başlangıçta gerekli `export` satırlarını yazar.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source ./bin/claude-env.sh
 
 node_cfg() {
   node --input-type=module -e "$1"
@@ -95,14 +96,7 @@ fi
 
 # --- 4. Claude Code ortam değişkenleri -----------------------------------
 export DEFAULT_PROVIDER="$PROVIDER"
-export ANTHROPIC_BASE_URL="${SERVER_URL}/${PROVIDER}"
-export ANTHROPIC_AUTH_TOKEN="${PROXY_TOKEN:-appproxy-local-dev}"
-if [[ -n "${MODEL}" ]]; then
-  export ANTHROPIC_MODEL="$MODEL"
-fi
-if [[ -n "$FAST_MODEL" ]]; then
-  export ANTHROPIC_SMALL_FAST_MODEL="$FAST_MODEL"
-fi
+apply_claude_env "${SERVER_URL}/${PROVIDER}" "${PROXY_TOKEN:-appproxy-local-dev}" "${MODEL}" "$FAST_MODEL"
 
 echo
 echo "=========================================================="
@@ -113,9 +107,7 @@ echo "  Model    : ${MODEL:-<sunucu model kuralları belirler>}"
 echo "  Adres    : $ANTHROPIC_BASE_URL"
 echo
 echo "Claude Code'u başka bir terminalde çalıştırmak için:"
-echo "  export ANTHROPIC_BASE_URL=\"$ANTHROPIC_BASE_URL\""
-echo "  export ANTHROPIC_AUTH_TOKEN=\"$ANTHROPIC_AUTH_TOKEN\""
-[[ -n "${MODEL}" ]] && echo "  export ANTHROPIC_MODEL=\"$MODEL\""
+PROXY_TOKEN="$ANTHROPIC_AUTH_TOKEN" print_claude_env_exports "$ANTHROPIC_BASE_URL" "${MODEL}" "$FAST_MODEL"
 echo
 
 # --- 5. Proxy'yi ÖN PLANDA başlat (arka plana düşmez) --------------------

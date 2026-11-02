@@ -28,7 +28,7 @@ istemciye asla gönderilmez.
 3. [İlk Kurulum (Sıfırdan Başlama)](#-ilk-kurulum-sıfırdan-başlama)
 4. [Kullanım](#-kullanım)
 5. [Log Dosyası](#-log-dosyası)
-6. [Model Fallback](#-model-fallback)
+6. [Claude Code Model Eşlemesi ve Fallback](#-claude-code-model-eşlemesi-ve-fallback)
 7. [Provider Yönetimi](#-provider-yönetimi)
 8. [Manuel Kurulum (Detaylı)](#-manuel-kurulum-detaylı-adımlarla)
 9. [Testler](#-testler)
@@ -245,13 +245,32 @@ istemci başlangıcı ve çıkış kodu). **Prompt içerikleri ve API anahtarlar
 
 ---
 
-## 🔁 Model Fallback
+## 🔁 Claude Code Model Eşlemesi ve Fallback
 
-Claude Code arka plan işleri için `fastModel` (`ANTHROPIC_SMALL_FAST_MODEL`) ister; upstream bu modeli
-sunmuyorsa 404/410 (veya "model" geçen 400/403/422) döner ve Claude Code "There's an issue with the
-selected model" hatasını gösterir. Proxy bu durumda isteği **bir kez** sağlayıcının `defaultModel`'iyle
-yeniden dener ve `model.fallback` olayını loga yazar. Yanıt başlamışsa (streaming) fallback uygulanmaz.
-Kalıcı çözüm için `config/providers.json` içinde `fastModel` değerini erişebildiğiniz bir modele çevirin.
+Kaynak: [NVIDIA — Use Claude Code with NIM](https://docs.nvidia.com/nim/large-language-models/latest/ai-assistant-integrations/claude-code.html)
+(yerel kopya: [`docs/nvidia/use-claude-code-with-nim.md`](./docs/nvidia/use-claude-code-with-nim.md)).
+
+Claude Code özel bir model seçilse bile arka plan işleri için yerleşik takma adları (`haiku`, `sonnet`, `opus`)
+ve alt ajanları kullanmaya devam eder. Bunlar Anthropic model ID'lerine çözülürse upstream
+`404 / model does not exist` döner ve Claude Code "There's an issue with the selected model" gösterir.
+
+`proxy-run` ve `claude-proxy` bu yüzden Claude Code'u başlatırken (`bin/claude-env.sh`) şunları ayarlar:
+
+| Değişken | Değer |
+| --- | --- |
+| `ANTHROPIC_BASE_URL` | `http://127.0.0.1:<port>/<provider>` |
+| `ANTHROPIC_AUTH_TOKEN` | `PROXY_TOKEN` (`ANTHROPIC_API_KEY` **temizlenir**; gerçek anahtar proxy'ye sızmaz) |
+| `ANTHROPIC_MODEL`, `ANTHROPIC_CUSTOM_MODEL_OPTION` | seçilen model (`/model` listesine de eklenir) |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` / `_SONNET_MODEL` / `_OPUS_MODEL` | seçilen model |
+| `CLAUDE_CODE_SUBAGENT_MODEL` | seçilen model |
+
+Haiku (arka plan) takma adını sağlayıcının `fastModel` değerine yönlendirmek için `APPPROXY_USE_FAST_MODEL=1`
+verin; varsayılan, upstream'de var olduğu kesin olan seçili modeldir. Başka terminalde kullanmak için gereken
+`export` satırlarını `proxy-run` kendisi yazdırır.
+
+**Ek güvence (fallback):** yine de bir model upstream'de yoksa 404/410 (veya "model" geçen 400/403/422)
+alınır; proxy isteği **bir kez** sağlayıcının `defaultModel`'iyle yeniden dener ve `model.fallback` olayını loga yazar.
+Yanıt başlamışsa (streaming) fallback uygulanmaz.
 
 ---
 
@@ -520,7 +539,7 @@ appProxy/
 | Port çakışması | 8790 zaten kullanımda | `PROXY_PORT` ile farklı port deneyin |
 | Provider listede görünmüyor | `config/providers.json` güncel değil | `bin/proxy-run add` ile yeniden ekleyin |
 | Model keşfi başarısız | Upstream kapalı / anahtar hatalı | `npm run models <provider>` ile deneyin, `PROXY_LOG_BODIES=1` ile logları artırın |
-| `There's an issue with the selected model` | Upstream seçilen/hızlı modeli sunmuyor | `tail -n 30 logs/proxy-run.log` içindeki `request.failed` satırına (`status`, `upstreamBody`) bakın; `fastModel`'i değiştirin ([Model Fallback](#-model-fallback)) |
+| `There's an issue with the selected model` | Upstream seçilen/hızlı modeli sunmuyor | `tail -n 30 logs/proxy-run.log` içindeki `request.failed` satırına (`status`, `upstreamBody`) bakın; takma adlar `bin/claude-env.sh` ile eşlenir; gerekirse `fastModel`'i değiştirin ([Model Eşlemesi](#-claude-code-model-eşlemesi-ve-fallback)) |
 | `route.unknown` / 404 `not found` | İstemci desteklenmeyen bir yola istek attı | Log'daki `path` değerine bakın, `ANTHROPIC_BASE_URL`'in `/<provider>` ile bittiğini doğrulayın |
 | `proxy-run: command not found` | Alias yüklenmedi | `source ~/.bashrc` veya `install.sh`'i yeniden çalıştırın |
 | Anahtar `.git`'e gitmişse | `.env` yanlışlıkla eklenmiş | `git rm --cached .env` + anahtarları rotasyona uğratın |
