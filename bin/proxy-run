@@ -242,29 +242,113 @@ suggest_instance_name() {
   echo "proxy$n"
 }
 
+# Çalışan bir sürecin çalışma dizinini bulur (Linux /proc, macOS lsof, pwdx).
+# proxy-run repo köküne cd ettikten sonra node'u başlattığı için bu dizin aynı
+# zamanda "proxy hangi kurulumdan çalışıyor" sorusunun cevabıdır.
+process_cwd() {
+  local pid="${1:-}" dir=""
+  [[ -n "$pid" ]] || return 0
+  if [[ -L "/proc/$pid/cwd" ]]; then
+    dir="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+  fi
+  if [[ -z "$dir" ]] && command -v lsof >/dev/null 2>&1; then
+    dir="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+  fi
+  if [[ -z "$dir" ]] && command -v pwdx >/dev/null 2>&1; then
+    dir="$(pwdx "$pid" 2>/dev/null | sed 's/^[0-9]*: *//')"
+  fi
+  printf '%s' "$dir"
+}
+
+# Bir pid'in hâlâ appProxy (src/server.mjs) olup olmadığını doğrular.
+process_is_proxy() {
+  local pid="${1:-}" cmd=""
+  [[ -n "$pid" ]] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  if [[ -r "/proc/$pid/cmdline" ]]; then
+    cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+  elif command -v ps >/dev/null 2>&1; then
+    cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  fi
+  [[ "$cmd" == *src/server.mjs* ]]
+}
+
+# Bu kurulumun run/ kaydında olmayan appProxy süreçleri (başka bir checkout'tan
+# başlatılmış olabilir). $1: boşlukla ayrılmış izlenen pid listesi.
+untracked_proxy_pids() {
+  local tracked=" ${1:-} " pid cmd
+  if [[ -d /proc ]]; then
+    for pid in /proc/[0-9]*; do
+      pid="${pid#/proc/}"
+      [[ "$tracked" == *" $pid "* ]] && continue
+      cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+      [[ "$cmd" == *src/server.mjs* ]] && printf '%s\n' "$pid"
+    done
+  elif command -v ps >/dev/null 2>&1; then
+    ps -axo pid=,command= 2>/dev/null | while read -r pid cmd; do
+      [[ "$tracked" == *" $pid "* ]] && continue
+      [[ "$cmd" == *src/server.mjs* ]] && printf '%s\n' "$pid"
+    done
+  fi
+  return 0
+}
+
 status_proxy() {
   local running
   running="$(list_running_instances)"
-  if [[ -z "$running" ]]; then
+  local name pid host port provider model label health pdir tracked="" shown=0
+  if [[ -n "$running" ]]; then
+    echo "Çalışan proxy örnekleri:"
+    while IFS=$'\t' read -r name pid host port provider model; do
+      [[ -n "$name" ]] || continue
+      label="$name"
+      [[ "$name" == "default" ]] && label="default (isimsiz)"
+      [[ "$host" == "0.0.0.0" || "$host" == "::" ]] && host="127.0.0.1"
+      health="$(curl -sf --max-time 3 "http://$host:$port/health" 2>/dev/null || echo '(yanıt yok)')"
+      pdir="$(process_cwd "$pid")"
+      tracked+=" $pid"
+      shown=1
+      echo "  [$label] pid $pid"
+      # Hangi kurulumdan (repo kökünden) başlatıldığı: birden çok checkout varsa
+      # "neden eski davranıyor" sorusunun cevabı genelde buradadır.
+      if [[ -n "$pdir" && "$pdir" != "$ROOT_DIR" ]]; then
+        echo "    Dizin    : $pdir (bu betik: $ROOT_DIR)"
+      else
+        echo "    Dizin    : ${pdir:-bilinmiyor}"
+      fi
+      echo "    Provider : $provider"
+      echo "    Model    : $model"
+      echo "    OpenAI   : http://$host:$port/$provider/v1"
+      # Claude Code (Anthropic SDK) /v1/messages yolunu kendisi ekler; taban URL'de /v1 olmamalı.
+      echo "    Anthropic: http://$host:$port/$provider"
+      echo "    Health   : $health"
+    done <<< "$running"
+  fi
+
+  # Bu kurulumun kaydı olmayan süreçler: genelde başka bir checkout'tan
+  # başlatılmış proxy'lerdir, "status neden hiçbir şey göstermiyor" sorusunu yanıtlar.
+  local orphan orphan_header=0
+  for orphan in $(untracked_proxy_pids "$tracked"); do
+    # Tarama ile yazdırma arasında süreç ölmüş olabilir (kısa ömürlü kabuklar).
+    process_is_proxy "$orphan" || continue
+    if [[ "$orphan_header" -eq 0 ]]; then
+      if [[ "$shown" -eq 0 ]]; then
+        echo "Çalışan proxy var ama bu kurulumda kaydı yok:"
+      else
+        echo "Bu kurulumda kaydı olmayan süreçler:"
+      fi
+      orphan_header=1
+      shown=1
+    fi
+    echo "  [izlenmeyen] pid $orphan"
+    echo "    Dizin    : $(process_cwd "$orphan")"
+    echo "    Not      : başka bir appProxy kurulumundan başlatılmış; durdurmak için: kill $orphan"
+  done
+
+  if [[ "$shown" -eq 0 ]]; then
     echo "Proxy çalışmıyor."
     return 1
   fi
-  local name pid host port provider model label health
-  echo "Çalışan proxy örnekleri:"
-  while IFS=$'\t' read -r name pid host port provider model; do
-    [[ -n "$name" ]] || continue
-    label="$name"
-    [[ "$name" == "default" ]] && label="default (isimsiz)"
-    [[ "$host" == "0.0.0.0" || "$host" == "::" ]] && host="127.0.0.1"
-    health="$(curl -sf --max-time 3 "http://$host:$port/health" 2>/dev/null || echo '(yanıt yok)')"
-    echo "  [$label] pid $pid"
-    echo "    Provider : $provider"
-    echo "    Model    : $model"
-    echo "    OpenAI   : http://$host:$port/$provider/v1"
-    # Claude Code (Anthropic SDK) /v1/messages yolunu kendisi ekler; taban URL'de /v1 olmamalı.
-    echo "    Anthropic: http://$host:$port/$provider"
-    echo "    Health   : $health"
-  done <<< "$running"
   return 0
 }
 

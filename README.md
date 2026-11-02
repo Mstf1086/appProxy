@@ -359,6 +359,12 @@ bin/proxy-run stop proxy2       # sadece 'proxy2' örneğini durdur
 bin/proxy-run stop all           # tüm örnekleri durdur
 ```
 
+`status` her örnek için **Dizin** satırını da yazar: proxy'nin hangi repo
+kökünden (kurulumdan) başlatıldığı. Birden çok checkout varsa "neden eski
+davranıyor" sorusunun cevabı genelde orada olur. Bu kurulumun `run/` kaydında
+olmayan, başka bir dizinden başlatılmış proxy'ler de `[izlenmeyen]` etiketiyle
+listelenir.
+
 İsimli örneğe `--port` ile açık port da verilebilir:
 `bin/proxy-run <provider> <model> --port 8899` (çalışan proxy varken
 seçimde "açık kalsın" denirse bu port kullanılır).
