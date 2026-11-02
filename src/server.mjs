@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import http from 'node:http';
 import { loadConfig } from './config.mjs';
-import { createLogger } from './log.mjs';
+import { createLogger, upstreamBodyFields, summarizeErrorMessage } from './log.mjs';
 import { UpstreamError, sendAnthropicError } from './errors.mjs';
 import { normalizeRequest } from './translate/anthropic-in.mjs';
 import { handleAnthropicProvider } from './providers/anthropic.mjs';
@@ -10,6 +10,8 @@ import { handleGeminiProvider } from './providers/gemini.mjs';
 import { handleCohereProvider } from './providers/cohere.mjs';
 import { runWithRateLimitRetry } from './rate-limit.mjs';
 import { withModelFallback } from './model-fallback.mjs';
+import { checkProxyToken, isLoopbackHost } from './auth.mjs';
+import { estimateRequestTokens } from './tokens.mjs';
 import {
   handleCohereCompatible,
   handleOpenAiCompatible,
@@ -54,10 +56,11 @@ function parseRoute(rawUrl) {
 }
 
 function authorized(req) {
-  const token = cfg.proxyToken;
-  if (!token) return true;
-  const header = req.headers['x-api-key'] || req.headers.authorization?.replace(/^Bearer\s+/i, '');
-  return header === token;
+  return checkProxyToken({
+    token: cfg.proxyToken,
+    headers: req.headers,
+    remoteAddress: req.socket?.remoteAddress ?? '',
+  });
 }
 
 function readBody(req, maxBytes) {
@@ -231,8 +234,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (!authorized(req)) {
-    sendProtocolError(res, route.protocol, 401, 'invalid proxy token');
+  const auth = authorized(req);
+  if (!auth.ok) {
+    log.warn('auth.rejected', { path: pathname, status: auth.status, remote: req.socket?.remoteAddress });
+    sendProtocolError(res, route.protocol, auth.status, auth.message);
     return;
   }
 
@@ -307,9 +312,8 @@ const server = http.createServer(async (req, res) => {
   const fallbackPresets = cfg.models?.[route.provider]?.presets ?? [];
 
   if (route.endpoint === 'count_tokens') {
-    // Optional endpoint: a rough estimate (chars/4) keeps Claude Code from hitting a 404.
-    const chars = JSON.stringify({ system: body.system, messages: body.messages, tools: body.tools }).length;
-    const inputTokens = Math.max(1, Math.ceil(chars / 4));
+    // Optional endpoint: a rough estimate keeps Claude Code from hitting a 404.
+    const inputTokens = estimateRequestTokens(body);
     log.info('count_tokens.estimate', { provider: route.provider, input_tokens: inputTokens });
     helpers.sendJsonResponse(200, { input_tokens: inputTokens });
     return;
@@ -362,12 +366,12 @@ const server = http.createServer(async (req, res) => {
       log.info('request.done', { protocol: 'openai', provider: route.provider, model: prepared.meta.model });
     } catch (e) {
       log.error('request.failed', {
-        message: e.message,
+        message: summarizeErrorMessage(e.message, { enabled: cfg.server.logBodies }),
         status: e.status,
         protocol: 'openai',
         provider: route.provider,
         model: ctx.request.model,
-        upstreamBody: typeof e.body === 'string' ? e.body.slice(0, 800) : undefined,
+        ...upstreamBodyFields(e.body, { enabled: cfg.server.logBodies }),
       });
       if (!res.headersSent) sendOpenAiError(res, e.status || 502, e.message, { headers: e.headers || {} });
       else res.end();
@@ -425,13 +429,13 @@ const server = http.createServer(async (req, res) => {
     log.info('request.done', { protocol: 'anthropic', provider: route.provider, model: ctx.request.model, usage: meta.usage });
   } catch (e) {
     log.error('request.failed', {
-      message: e.message,
+      message: summarizeErrorMessage(e.message, { enabled: cfg.server.logBodies }),
       status: e.status,
       protocol: 'anthropic',
       provider: route.provider,
       model: ctx.request.model,
       requestedModel: meta.requestedModel,
-      upstreamBody: typeof e.body === 'string' ? e.body.slice(0, 800) : undefined,
+      ...upstreamBodyFields(e.body, { enabled: cfg.server.logBodies }),
     });
     if (!res.headersSent) sendAnthropicError(res, e.status || 502, e.message, e.headers || {});
     else res.end();
@@ -441,8 +445,23 @@ const server = http.createServer(async (req, res) => {
 const port = cfg.server.port;
 const host = cfg.server.host;
 server.listen(port, host, () => {
-  log.info('server.start', { host, port, defaultProvider });
+  log.info('server.start', { host, port, defaultProvider, tokenRequired: Boolean(cfg.proxyToken) });
   process.stderr.write(`appProxy listening on http://${host}:${port} (default=${defaultProvider})\n`);
+  if (!cfg.proxyToken) {
+    if (isLoopbackHost(host)) {
+      // Fine: only this machine can reach the port. Non-loopback peers are still
+      // rejected per request, so a later tunnel/proxy does not silently open it.
+      log.info('server.token.absent', { scope: 'loopback-only' });
+    } else {
+      log.warn('server.token.absent', {
+        host,
+        hint: 'set PROXY_TOKEN in .env; non-loopback requests are rejected while it is empty',
+      });
+      process.stderr.write(
+        `[uyarı] PROXY_TOKEN boş ve sunucu ${host} üzerinde dinliyor: loopback dışı istekler 401 ile reddedilecek.\n`,
+      );
+    }
+  }
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) {

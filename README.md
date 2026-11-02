@@ -512,6 +512,8 @@ appProxy/
 │   ├── providers/      # anthropic | cohere | gemini | openai bağdaştırıcıları
 │   ├── translate/      # protokol çevirileri (anthropic ↔ openai ↔ cohere)
 │   ├── http.mjs, sse.mjs, errors.mjs, log.mjs
+│   ├── auth.mjs        # PROXY_TOKEN denetimi (loopback dışı fail-closed)
+│   ├── tokens.mjs      # kaba token tahmini (count_tokens + akış)
 │   └── models.mjs      # model keşfi + eşleme
 └── tests/              # birim testler
 ```
@@ -529,10 +531,13 @@ appProxy/
 
 - `.env` asla commit edilmez (`.gitignore`) ve anahtar değerleri loglara yazılmaz.
 - Proxy, `PROXY_TOKEN` ile doğrular; gerçek sağlayıcı anahtarı istemciden gizli kalır.
+- `PROXY_TOKEN` boşsa yalnızca loopback istemcileri kabul edilir. `PROXY_HOST=0.0.0.0`
+  yapıldığında dış istekler 401 alır (eskiden kimlik doğrulama tamamen kapanıyordu).
 - Sunucu varsayılan olarak yalnızca `127.0.0.1` dinler.
 - `.env` içindeki anahtarlar açık metindir — saklama ve rotasyon sorumluluğu
   kullanıcudadır.
-- `PROXY_LOG_BODIES=0` varsayılandır; prompt gövdeleri loglanmaz.
+- `PROXY_LOG_BODIES=0` varsayılandır; prompt gövdeleri loglanmaz. Upstream hata
+  gövdeleri prompt'u geri yansıttığı için varsayılanda yalnızca boyutları loglanır.
 
 ---
 
